@@ -1,0 +1,21 @@
+# Render Blueprint — free web service
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: steelshop-care
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: USE_MOCK_LLM
+        value: "true"
+      - key: EMBEDDING_BACKEND
+        value: hash
+      - key: VECTOR_STORE
+        value: simple
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./data/cs_bot.db
+      - key: COMPANY_NAME
+        value: SteelShop

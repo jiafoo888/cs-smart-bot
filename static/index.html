@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SteelShop Care — Enterprise CS Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="atmosphere" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand-block">
+      <div class="logo-mark" aria-hidden="true"></div>
+      <div>
+        <p class="brand">SteelShop Care</p>
+        <p class="brand-sub">Enterprise customer service agent</p>
+      </div>
+    </div>
+    <div class="top-metrics" id="topMetrics">
+      <div class="metric"><span class="m-label">Orders</span><strong id="mOrders">—</strong></div>
+      <div class="metric"><span class="m-label">Payments OK</span><strong id="mPay">—</strong></div>
+      <div class="metric"><span class="m-label">KB chunks</span><strong id="mChunks">—</strong></div>
+      <div class="metric"><span class="m-label">Open tickets</span><strong id="mTickets">—</strong></div>
+    </div>
+    <div class="top-actions">
+      <span class="live-pill"><i></i> Live demo</span>
+      <label class="switch">
+        <input type="checkbox" id="debugToggle" />
+        <span>Ops debug</span>
+      </label>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="rail">
+      <section class="rail-section">
+        <h2>Inbox</h2>
+        <button class="session active" data-session="care-demo-1" type="button">
+          <strong>Guest · Web chat</strong>
+          <span>Active · session care-demo-1</span>
+        </button>
+        <button class="session" data-session="care-demo-vip" type="button">
+          <strong>VIP · Priority</strong>
+          <span>Escalation-ready · care-demo-vip</span>
+        </button>
+      </section>
+
+      <section class="rail-section">
+        <h2>Agent graph</h2>
+        <ol class="pipeline" id="pipeline">
+          <li data-node="supervisor">Supervisor</li>
+          <li data-node="smalltalk">Greeting</li>
+          <li data-node="faq">Policy RAG</li>
+          <li data-node="order">Orders</li>
+          <li data-node="payment">Payments</li>
+          <li data-node="refund">Refunds</li>
+          <li data-node="loyalty">Loyalty</li>
+          <li data-node="escalate">Human desk</li>
+          <li data-node="handoff">Bot paused</li>
+        </ol>
+      </section>
+
+      <section class="rail-section stack-gap">
+        <h2>Quick intents</h2>
+        <div class="chips" id="quickIntents">
+          <button type="button" data-q="What is the return policy window?">Return policy</button>
+          <button type="button" data-q="Show tracking timeline for ORD-1001">Tracking timeline</button>
+          <button type="button" data-q="Issue an invoice for ORD-1002">E-invoice</button>
+          <button type="button" data-q="I want to exchange ORD-1005">Exchange</button>
+          <button type="button" data-q="Please nudge fulfillment for ORD-1004">Nudge ship</button>
+          <button type="button" data-q="What are my loyalty points and coupons?">Points & coupons</button>
+          <button type="button" data-q="Please refund ORD-1002">Refund</button>
+          <button type="button" data-q="Cancel order ORD-1003">Cancel</button>
+          <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate</button>
+          <button type="button" data-q="I'd rate this chat 5 stars">Rate 5★</button>
+        </div>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-head">
+        <div>
+          <h1>Conversation</h1>
+          <p class="muted" id="sessionLabel">session · care-demo-1</p>
+        </div>
+      </div>
+
+      <div class="stage-scroll">
+        <div id="messages" class="messages" aria-live="polite"></div>
+      </div>
+
+      <form id="chatForm" class="composer">
+        <div class="composer-shell">
+          <textarea id="messageInput" rows="2" placeholder="Ask about policy, orders (ORD-xxxx), payments (PAY-xxxx), refunds, or escalate…"></textarea>
+          <div class="composer-bar">
+            <span class="hint">Enter to send · Shift+Enter newline</span>
+            <button type="submit" id="sendBtn">Send reply</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <aside class="context">
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab active" data-tab="context">Customer</button>
+        <button type="button" class="tab" data-tab="knowledge">Knowledge</button>
+        <button type="button" class="tab" data-tab="ops">Ops</button>
+      </div>
+
+      <div class="tab-panel active" id="panel-context">
+        <article class="panel-block">
+          <h3>Linked context</h3>
+          <dl class="kv" id="contextKv">
+            <div><dt>Order</dt><dd id="ctxOrder">—</dd></div>
+            <div><dt>Payment</dt><dd id="ctxPayment">—</dd></div>
+            <div><dt>Last agent</dt><dd id="ctxAgent">—</dd></div>
+            <div><dt>Bot</dt><dd id="ctxBot">active</dd></div>
+          </dl>
+        </article>
+        <article class="panel-block" id="handoffPanel">
+          <h3>Human takeover</h3>
+          <p class="muted small">After escalate, the bot pauses. Reply as human agent here.</p>
+          <textarea id="humanMsg" rows="3" placeholder="Human agent reply…" class="human-box"></textarea>
+          <div class="handoff-actions">
+            <button type="button" class="ghost" id="btnHumanReply">Send as human</button>
+            <button type="button" class="ghost" id="btnResumeBot">Resume bot</button>
+          </div>
+        </article>
+        <article class="panel-block">
+          <h3>CSAT</h3>
+          <div class="csat-row" id="csatStars">
+            <button type="button" data-score="1">1</button>
+            <button type="button" data-score="2">2</button>
+            <button type="button" data-score="3">3</button>
+            <button type="button" data-score="4">4</button>
+            <button type="button" data-score="5">5</button>
+          </div>
+          <p class="muted small" id="csatHint">Rate this session 1–5</p>
+        </article>
+        <article class="panel-block">
+          <div class="row-head">
+            <h3>Orders</h3>
+            <button type="button" class="ghost" id="refreshOrders">Refresh</button>
+          </div>
+          <div id="orders" class="feed"></div>
+        </article>
+        <article class="panel-block">
+          <div class="row-head">
+            <h3>Payments</h3>
+            <button type="button" class="ghost" id="refreshPayments">Refresh</button>
+          </div>
+          <div id="payments" class="feed"></div>
+        </article>
+        <article class="panel-block">
+          <div class="row-head">
+            <h3>Tickets</h3>
+            <button type="button" class="ghost" id="refreshTickets">Refresh</button>
+          </div>
+          <div id="tickets" class="feed"></div>
+        </article>
+      </div>
+
+      <div class="tab-panel" id="panel-knowledge">
+        <article class="panel-block">
+          <h3>Knowledge base</h3>
+          <p class="muted small" id="kbSummary">Loading…</p>
+          <div class="kb-knobs" id="kbKnobs"></div>
+          <div id="kbDocs" class="feed"></div>
+        </article>
+        <article class="panel-block">
+          <h3>Probe retrieval</h3>
+          <form id="kbSearchForm" class="kb-search">
+            <input id="kbQuery" placeholder="Search policies…" />
+            <button type="submit">Search</button>
+          </form>
+          <div id="kbHits" class="feed"></div>
+        </article>
+      </div>
+
+      <div class="tab-panel" id="panel-ops">
+        <article class="panel-block">
+          <h3>Runtime</h3>
+          <pre class="ops-pre" id="opsHealth">…</pre>
+        </article>
+        <article class="panel-block">
+          <h3>Last debug payload</h3>
+          <pre class="ops-pre" id="opsDebug">Enable Ops debug, then send a message.</pre>
+        </article>
+        <article class="panel-block actions">
+          <button type="button" class="ghost wide" id="btnReingest">Re-ingest policies</button>
+          <button type="button" class="ghost wide" id="btnReseed">Reset demo orders</button>
+        </article>
+      </div>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+services:
+  cs-bot:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      USE_MOCK_LLM: "true"
+      EMBEDDING_BACKEND: "hash"
+      VECTOR_STORE: "simple"
+      RAG_CHUNK_SIZE: "450"
+      RAG_CHUNK_OVERLAP: "90"
+      RAG_TOP_K: "4"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DATABASE_URL: sqlite+aiosqlite:///./data/cs_bot.db
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
