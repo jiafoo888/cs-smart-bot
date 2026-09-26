@@ -54,7 +54,7 @@ async function sendChat(message) {
   const include_debug = $("debugToggle").checked;
   addMessage("user", message);
   $("messageInput").value = "";
-  const typing = addMessage("bot", "SteelShop Care is drafting a reply…", { typing: true });
+  const typing = addMessage("bot", "Working…", { typing: true });
   $("sendBtn").disabled = true;
   try {
     const res = await fetch("/chat", {
@@ -216,7 +216,7 @@ document.querySelectorAll(".session").forEach((btn) => {
     $("messages").innerHTML = "";
     addMessage(
       "bot",
-      "Hi — welcome to SteelShop Care. I can answer store policies from our knowledge base, look up orders and payments, process refunds, or escalate to a human specialist."
+      "SteelShop Care online. Ask about policies, orders, payments, refunds, or escalate to an agent."
     );
     $("ctxOrder").textContent = "—";
     $("ctxPayment").textContent = "—";
@@ -309,6 +309,6 @@ $("btnReseed").onclick = async () => {
 Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics(), loadKb(), loadHealth(), loadProfile(), loadAssist()]);
 addMessage(
   "bot",
-  "Hi — welcome to SteelShop Care. I can answer store policies from our knowledge base, look up orders and payments, process refunds, or escalate to a human specialist."
+  "SteelShop Care online. Ask about policies, orders, payments, refunds, or escalate to an agent."
 );
 setPipeline("supervisor");
