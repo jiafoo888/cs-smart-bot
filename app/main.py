@@ -35,6 +35,12 @@ from app.graph.supervisor import chat
 from app.mcp_bridge import list_mcp_tools
 from app.rag.ingest import ingest_all_policies, knowledge_base_stats
 from app.rag.retriever import format_context, retrieve_faq
+from app.trust import (
+    build_assist,
+    customer_360,
+    get_identity,
+    update_ticket_status,
+)
 
 
 @asynccontextmanager
@@ -88,6 +94,9 @@ class ChatResponse(BaseModel):
     payment_id: str | None = None
     sources: list[SourceChip] = []
     bot_paused: bool = False
+    verified: bool = False
+    customer_tier: str | None = None
+    pending_action: str | None = None
     debug: dict | None = None
 
 
@@ -198,12 +207,15 @@ async def api_metrics():
     for o in orders:
         by_status[o["status"]] = by_status.get(o["status"], 0) + 1
     pay_ok = sum(1 for p in payments if p["status"] == "succeeded")
+    tickets_open = [t for t in tickets if t["status"] == "open"]
+    sla_breached = sum(1 for t in tickets_open if t.get("sla_status") == "breached")
     return {
         "orders_total": len(orders),
         "orders_by_status": by_status,
         "payments_total": len(payments),
         "payments_succeeded": pay_ok,
-        "tickets_open": sum(1 for t in tickets if t["status"] == "open"),
+        "tickets_open": len(tickets_open),
+        "tickets_sla_breached": sla_breached,
         "tickets_total": len(tickets),
         "kb": knowledge_base_stats(),
         "agents": [
@@ -215,9 +227,11 @@ async def api_metrics():
             "refund",
             "loyalty",
             "escalate",
+            "verify",
             "csat",
             "handoff",
         ],
+        "auto_refund_limit": 300,
     }
 
 
@@ -259,6 +273,37 @@ async def api_human_reply(session_id: str, body: HumanReplyRequest):
 @app.post("/api/sessions/{session_id}/resume-bot")
 async def api_resume_bot(session_id: str):
     return resume_bot(session_id)
+
+
+@app.get("/api/sessions/{session_id}/identity")
+async def api_identity(session_id: str):
+    return get_identity(session_id)
+
+
+@app.get("/api/sessions/{session_id}/profile")
+async def api_profile(session_id: str):
+    ident = get_identity(session_id)
+    profile = customer_360(ident.get("customer_id"), session_id=session_id)
+    return profile or {"session_id": session_id, "identity": ident}
+
+
+@app.get("/api/sessions/{session_id}/assist")
+async def api_assist(session_id: str):
+    return build_assist(session_id)
+
+
+class TicketStatusRequest(BaseModel):
+    status: str = Field(..., min_length=1)
+
+
+@app.post("/api/tickets/{ticket_id}/status")
+async def api_ticket_status(ticket_id: str, body: TicketStatusRequest):
+    data = update_ticket_status(ticket_id, body.status)
+    if data is None:
+        raise HTTPException(404, f"Ticket {ticket_id} not found")
+    if not data.get("ok"):
+        raise HTTPException(400, data.get("error") or "invalid status")
+    return data
 
 
 @app.get("/api/mcp/tools")

@@ -77,7 +77,7 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
     return f"{body}\n\nAnything else I can help with — an order, payment, or return?"
 
 
-def compose_order_answer(data: dict, pays: list[dict] | None = None) -> str:
+def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified: bool = False) -> str:
     pays = pays or data.get("payments") or []
     tracking = data.get("tracking_no")
     carrier = data.get("carrier")
@@ -91,15 +91,22 @@ def compose_order_answer(data: dict, pays: list[dict] | None = None) -> str:
         p0 = pays[0]
         pay_bit = (
             f" The latest payment {p0['payment_id']} is {p0['status']} "
-            f"({p0['method']}, ¥{p0['amount']})."
+            f"(¥{p0['amount']})."
+        )
+    addr = data.get("shipping_address") or "n/a"
+    verify_nudge = ""
+    if not verified:
+        verify_nudge = (
+            " Full address is hidden until you verify — reply with the last 4 digits "
+            "of the phone on this order (demo: 1001 for ORD-1001)."
         )
     return (
         f"Here's what I see for {data['order_id']}: "
         f"{data['product']} (x{data.get('quantity', 1)}) for "
         f"¥{data['amount']} {data.get('currency', 'CNY')}, status {data['status']}. "
         f"Shipping: {ship}. "
-        f"Address on file: {data.get('shipping_address') or 'n/a'}."
-        f"{pay_bit}"
+        f"Address on file: {addr}."
+        f"{pay_bit}{verify_nudge}"
     )
 
 
@@ -171,7 +178,8 @@ def compose_greeting() -> str:
     return (
         "Hi! I'm SteelShop support. I can help with orders, payments, tracking, "
         "invoices, exchanges, cancellations, loyalty points, returns, and policies. "
-        "What do you need today?"
+        "For refunds, cancellations, or address changes I'll verify the account first "
+        "(last 4 of the phone on the order). What do you need today?"
     )
 
 
@@ -299,7 +307,61 @@ def compose_off_topic() -> str:
     )
 
 
-def compose_escalate(ticket_id: str, order_id: str | None) -> str:
+def compose_verify_prompt(order_id: str | None = None) -> str:
+    target = f" for {order_id}" if order_id else ""
+    return (
+        f"I need to verify the account{target} before I can show personal details "
+        "or change the order. Reply with the last 4 digits of the phone on file, "
+        "or the account email. (Demo: ORD-1001 → 1001, ORD-1002 → 1002, VIP ORD-1005 → 1004.)"
+    )
+
+
+def compose_verify_ok(ident: dict) -> str:
+    name = ident.get("customer_name") or ident.get("customer_id") or "the account"
+    tier = ident.get("tier") or "standard"
+    extra = " VIP routing is on." if tier == "vip" else ""
+    return (
+        f"Verified — thanks, {name} ({tier} tier).{extra} "
+        "I can now show full order details and take actions like refund, cancel, or address change."
+    )
+
+
+def compose_verify_fail(error: str) -> str:
+    return f"Verification didn't go through: {error}"
+
+
+def compose_confirm_mutation(pending: dict) -> str:
+    action = pending.get("action")
+    oid = pending.get("order_id")
+    amount = pending.get("amount")
+    from app.trust import AUTO_MUTATION_LIMIT
+
+    if pending.get("requires_approval"):
+        return (
+            f"I can start a {action} for {oid} (¥{amount}). "
+            f"That's over the bot auto-limit of ¥{AUTO_MUTATION_LIMIT:.0f}, so a specialist "
+            "must approve it after you confirm. Reply YES to open a priority ticket, or NO to cancel."
+        )
+    return (
+        f"Please confirm: I will {action} {oid} (¥{amount}). "
+        "This can't be undone from chat. Reply YES to proceed, or NO to cancel."
+    )
+
+
+def compose_denied_mutation() -> str:
+    return "Okay — I cancelled that pending action. Nothing was changed."
+
+
+def compose_approval_hold(ticket: dict, pending: dict) -> str:
+    return (
+        f"Confirmed. {pending['action'].title()} on {pending['order_id']} (¥{pending['amount']}) "
+        f"needs specialist approval. Opened ticket {ticket['ticket_id']} "
+        f"({ticket.get('priority')} priority, first-response SLA {ticket.get('sla_minutes')} min). "
+        "I've paused the bot so an agent can finish this."
+    )
+
+
+def compose_escalate(ticket_id: str, order_id: str | None = None) -> str:
     base = (
         f"I've opened ticket {ticket_id} for a human specialist. "
         "They'll follow up using this conversation."
@@ -307,6 +369,13 @@ def compose_escalate(ticket_id: str, order_id: str | None) -> str:
     if order_id:
         return f"{base} I also linked order {order_id}."
     return base
+
+
+def compose_pending_reminder(pending: dict) -> str:
+    return (
+        f"There's still a pending {pending.get('action')} for {pending.get('order_id')} "
+        f"(¥{pending.get('amount')}). Reply YES to continue, or NO to cancel it."
+    )
 
 
 def is_greeting(text: str) -> bool:

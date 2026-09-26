@@ -15,14 +15,17 @@ from app.db.enterprise_ops import (
     pause_bot_for_human,
     save_satisfaction,
 )
-from app.db.repository import append_chat_log, create_ticket
+from app.db.repository import append_chat_log, create_ticket, lookup_order
 from app.mcp_bridge import call_mcp_tool
+from app.pii import redact_order, redact_payment
 from app.rag.retriever import retrieve_faq, sources_for_ui
 from app.response import (
     compose_address_answer,
+    compose_approval_hold,
     compose_cancel_answer,
+    compose_confirm_mutation,
     compose_csat_answer,
-    compose_escalate,
+    compose_denied_mutation,
     compose_exchange_answer,
     compose_greeting,
     compose_handoff_hold,
@@ -34,14 +37,32 @@ from app.response import (
     compose_order_answer,
     compose_payment_answer,
     compose_payments_list,
+    compose_pending_reminder,
     compose_policy_answer,
     compose_refund_answer,
     compose_tracking_answer,
+    compose_verify_fail,
+    compose_verify_ok,
+    compose_verify_prompt,
     is_follow_up,
     is_greeting,
     parse_csat_score,
 )
 from app.tools.order_tools import extract_new_address, extract_order_id, extract_payment_id
+from app.trust import (
+    bind_order,
+    clear_pending,
+    execute_pending,
+    get_identity,
+    get_pending,
+    is_confirm,
+    is_deny,
+    looks_like_verify,
+    mutation_requires_approval,
+    parse_verify_token,
+    set_pending,
+    verify_session,
+)
 
 AgentName = Literal[
     "smalltalk", "faq", "order", "payment", "refund", "loyalty", "escalate", "finish"
@@ -64,6 +85,64 @@ def _last_user_text(state: CSState) -> str:
         if isinstance(m, HumanMessage) or getattr(m, "type", None) == "human":
             return str(m.content)
     return ""
+
+
+def _finish(
+    msg: str,
+    agent: str,
+    *,
+    order_id: str | None = None,
+    payment_id: str | None = None,
+    sources: list | None = None,
+    debug: dict | None = None,
+) -> dict:
+    out: dict = {
+        "messages": [AIMessage(content=msg)],
+        "last_agent": agent,
+        "next_agent": "finish",
+        "sources": sources or [],
+        "debug": debug or {},
+    }
+    if order_id is not None:
+        out["order_id"] = order_id
+    if payment_id is not None:
+        out["payment_id"] = payment_id
+    return out
+
+
+def _gate_mutation(state: CSState, action: str, oid: str, payload: dict, agent: str) -> dict:
+    sid = state.get("session_id") or "unknown"
+    bind_order(sid, oid)
+    ident = get_identity(sid)
+    if not ident.get("verified"):
+        return _finish(
+            compose_verify_prompt(oid),
+            agent,
+            order_id=oid,
+            debug={"gate": "verify", "action": action},
+        )
+    order = lookup_order(oid)
+    if not order:
+        return _finish(
+            f"I couldn't find {oid}. Double-check the id and try again.",
+            agent,
+            order_id=oid,
+        )
+    amount = float(order.get("amount") or 0)
+    pending = set_pending(
+        sid,
+        action,
+        oid,
+        amount=amount,
+        requires_approval=mutation_requires_approval(amount, ident.get("tier") or "standard"),
+        payload=payload,
+    )
+    return _finish(
+        compose_confirm_mutation(pending),
+        agent,
+        order_id=oid,
+        debug={"gate": "confirm", "pending": pending, "tier": ident.get("tier")},
+    )
 
 
 def route_intent(state: CSState) -> dict:
@@ -218,61 +297,33 @@ async def order_agent(state: CSState) -> dict:
         "cancel" in t and (oid or "order" in t)
     ):
         if not oid:
-            msg = "I can cancel an unshipped order — please share the order id (e.g. ORD-1003)."
-            return {
-                "messages": [AIMessage(content=msg)],
-                "last_agent": "order",
-                "next_agent": "finish",
-                "sources": [],
-            }
-        raw = await call_mcp_tool(
-            "cancel_order", {"order_id": oid, "reason": "customer_request_via_bot"}
+            return _finish(
+                "I can cancel an unshipped order — please share the order id (e.g. ORD-1003).",
+                "order",
+            )
+        return _gate_mutation(
+            state, "cancel", oid, {"reason": "customer_request_via_bot"}, "order"
         )
-        result = json.loads(raw)
-        return {
-            "messages": [AIMessage(content=compose_cancel_answer(result))],
-            "last_agent": "order",
-            "order_id": oid,
-            "next_agent": "finish",
-            "sources": [],
-            "debug": {"mcp_tool": "cancel_order", "result": result},
-        }
 
     # Update shipping address
     if any(k in t for k in ("update address", "change address", "new address", "shipping to")) or (
         "address" in t and ("update" in t or "change" in t or " to " in t)
     ):
         if not oid:
-            msg = "I can update the address before shipping — send ORD-xxxx and the new address."
-            return {
-                "messages": [AIMessage(content=msg)],
-                "last_agent": "order",
-                "next_agent": "finish",
-                "sources": [],
-            }
+            return _finish(
+                "I can update the address before shipping — send ORD-xxxx and the new address.",
+                "order",
+            )
         new_addr = extract_new_address(text)
         if not new_addr:
-            msg = f"What should the new address be for {oid}?"
-            return {
-                "messages": [AIMessage(content=msg)],
-                "last_agent": "order",
-                "order_id": oid,
-                "next_agent": "finish",
-                "sources": [],
-            }
-        raw = await call_mcp_tool(
-            "update_shipping_address",
-            {"order_id": oid, "new_address": new_addr},
+            return _finish(
+                f"What should the new address be for {oid}?",
+                "order",
+                order_id=oid,
+            )
+        return _gate_mutation(
+            state, "address", oid, {"new_address": new_addr}, "order"
         )
-        result = json.loads(raw)
-        return {
-            "messages": [AIMessage(content=compose_address_answer(result))],
-            "last_agent": "order",
-            "order_id": oid,
-            "next_agent": "finish",
-            "sources": [],
-            "debug": {"mcp_tool": "update_shipping_address", "result": result},
-        }
 
     # Tracking timeline (carrier mock)
     if any(
@@ -383,6 +434,9 @@ async def order_agent(state: CSState) -> dict:
             "sources": [],
         }
 
+    sid = state.get("session_id") or "unknown"
+    bind_order(sid, oid)
+    ident = get_identity(sid)
     raw = await call_mcp_tool("get_order_status", {"order_id": oid})
     data = json.loads(raw)
     if data.get("error"):
@@ -399,15 +453,22 @@ async def order_agent(state: CSState) -> dict:
     if not pays:
         pay_raw = await call_mcp_tool("get_order_payments", {"order_id": oid})
         pays = json.loads(pay_raw).get("payments") or []
+    pays = [redact_payment(p, verified=bool(ident.get("verified"))) or p for p in pays]
+    data = redact_order(data, verified=bool(ident.get("verified"))) or data
 
-    msg = compose_order_answer(data, pays)
+    msg = compose_order_answer(data, pays, verified=bool(ident.get("verified")))
     return {
         "messages": [AIMessage(content=msg)],
         "last_agent": "order",
         "order_id": oid,
         "next_agent": "finish",
         "sources": [],
-        "debug": {"mcp_tool": "get_order_status", "order": data},
+        "debug": {
+            "mcp_tool": "get_order_status",
+            "order": data,
+            "verified": ident.get("verified"),
+            "tier": ident.get("tier"),
+        },
     }
 
 
@@ -420,11 +481,15 @@ async def payment_agent(state: CSState) -> dict:
     if pid:
         raw = await call_mcp_tool("get_payment_status", {"payment_id": pid})
         data = json.loads(raw)
+        ident = get_identity(state.get("session_id") or "")
         if data.get("error"):
             msg = f"I couldn't find payment {pid}."
         else:
+            data = redact_payment(data, verified=bool(ident.get("verified"))) or data
             msg = compose_payment_answer(data)
             oid = data.get("order_id") or oid
+            if oid:
+                bind_order(state.get("session_id") or "unknown", oid)
         return {
             "messages": [AIMessage(content=msg)],
             "last_agent": "payment",
@@ -461,49 +526,39 @@ async def refund_agent(state: CSState) -> dict:
     text = _last_user_text(state)
     oid = extract_order_id(text) or (state.get("order_id") if is_follow_up(text.lower()) else None)
     if not oid:
-        msg = "I can start a refund — please send the order id (for example ORD-1002)."
-        return {
-            "messages": [AIMessage(content=msg)],
-            "last_agent": "refund",
-            "next_agent": "finish",
-            "sources": [],
-        }
-
-    policy_hits = retrieve_faq("refund timeline return policy")
-    raw = await call_mcp_tool(
-        "request_refund",
-        {"order_id": oid, "reason": "customer_request_via_bot"},
+        return _finish(
+            "I can start a refund — please send the order id (for example ORD-1002).",
+            "refund",
+        )
+    return _gate_mutation(
+        state, "refund", oid, {"reason": "customer_request_via_bot"}, "refund"
     )
-    result = json.loads(raw)
-    msg = compose_refund_answer(result, policy_hits)
-    return {
-        "messages": [AIMessage(content=msg)],
-        "last_agent": "refund",
-        "order_id": oid,
-        "next_agent": "finish",
-        "sources": sources_for_ui(policy_hits),
-        "debug": {
-            "mcp_tools": ["request_refund"],
-            "result": result,
-            "policy_hits": [
-                {"source": h.get("source"), "score": h.get("score")} for h in policy_hits
-            ],
-        },
-    }
 
 
 async def loyalty_agent(state: CSState) -> dict:
     text = _last_user_text(state)
+    sid = state.get("session_id") or "unknown"
     oid = extract_order_id(text) or state.get("order_id")
+    ident = get_identity(sid)
+    if oid:
+        bind_order(sid, oid)
+        ident = get_identity(sid)
+    if not ident.get("verified"):
+        return _finish(
+            compose_verify_prompt(oid or ident.get("order_id")),
+            "loyalty",
+            order_id=oid,
+            debug={"gate": "verify", "action": "loyalty"},
+        )
     raw = await call_mcp_tool(
         "get_loyalty",
-        {"customer_id": "", "order_id": oid or ""},
+        {"customer_id": ident.get("customer_id") or "", "order_id": oid or ident.get("order_id") or ""},
     )
     result = json.loads(raw)
     return {
         "messages": [AIMessage(content=compose_loyalty_answer(result))],
         "last_agent": "loyalty",
-        "order_id": oid,
+        "order_id": oid or ident.get("order_id"),
         "next_agent": "finish",
         "sources": [],
         "debug": {"mcp_tool": "get_loyalty", "result": result},
@@ -591,37 +646,88 @@ def reset_graph() -> None:
 
 async def chat(session_id: str, message: str) -> dict:
     append_chat_log(session_id, "user", message)
+    ident = get_identity(session_id)
+    pending = get_pending(session_id)
 
-    # CSAT can be submitted even while bot is paused
+    def _pack(reply: str, agent: str, *, order_id=None, payment_id=None, sources=None, debug=None, bot_paused=None):
+        ident_now = get_identity(session_id)
+        pend = get_pending(session_id)
+        paused = is_bot_paused(session_id) if bot_paused is None else bot_paused
+        append_chat_log(session_id, "assistant", reply, agent=agent, meta=debug)
+        return {
+            "session_id": session_id,
+            "reply": reply,
+            "agent": agent,
+            "order_id": order_id or ident_now.get("order_id"),
+            "payment_id": payment_id,
+            "sources": sources or [],
+            "bot_paused": paused,
+            "verified": bool(ident_now.get("verified")),
+            "customer_tier": ident_now.get("tier"),
+            "pending_action": (pend or {}).get("action"),
+            "debug": debug or {},
+        }
+
     score = parse_csat_score(message)
     if score is not None:
         result = save_satisfaction(session_id, score)
-        reply = compose_csat_answer(result)
-        append_chat_log(session_id, "assistant", reply, agent="csat")
-        return {
-            "session_id": session_id,
-            "reply": reply,
-            "agent": "csat",
-            "order_id": None,
-            "payment_id": None,
-            "sources": [],
-            "bot_paused": is_bot_paused(session_id),
-            "debug": {"csat": result},
-        }
+        return _pack(compose_csat_answer(result), "csat", debug={"csat": result})
+
+    if looks_like_verify(message) and not is_confirm(message):
+        token = parse_verify_token(message)
+        if not token:
+            return _pack(compose_verify_prompt(ident.get("order_id")), "verify")
+        result = verify_session(session_id, token)
+        if not result.get("ok"):
+            return _pack(compose_verify_fail(result.get("error") or "mismatch"), "verify", debug=result)
+        reply = compose_verify_ok(result)
+        if pending:
+            reply += " " + compose_pending_reminder(pending)
+        return _pack(reply, "verify", debug={"identity": result})
 
     if is_bot_paused(session_id):
-        reply = compose_handoff_waiting()
-        append_chat_log(session_id, "assistant", reply, agent="handoff")
-        return {
-            "session_id": session_id,
-            "reply": reply,
-            "agent": "handoff",
-            "order_id": None,
-            "payment_id": None,
-            "sources": [],
-            "bot_paused": True,
-            "debug": {"bot_paused": True},
-        }
+        return _pack(compose_handoff_waiting(), "handoff", bot_paused=True, debug={"bot_paused": True})
+
+    if pending:
+        if is_confirm(message):
+            if pending.get("requires_approval"):
+                ticket = create_ticket(
+                    session_id=session_id,
+                    summary=f"{pending['action']} approval for {pending['order_id']} (¥{pending['amount']})",
+                    category="refund_approval",
+                    order_id=pending.get("order_id"),
+                    over_limit=True,
+                )
+                pause_bot_for_human(session_id, ticket_id=ticket["ticket_id"])
+                clear_pending(session_id)
+                reply = compose_approval_hold(ticket, pending)
+                return _pack(
+                    reply,
+                    "escalate",
+                    order_id=pending.get("order_id"),
+                    bot_paused=True,
+                    debug={"ticket": ticket, "pending": pending},
+                )
+            result = execute_pending(session_id, pending)
+            policy_hits = retrieve_faq("refund timeline return policy") if pending["action"] == "refund" else []
+            if pending["action"] == "refund":
+                reply = compose_refund_answer(result, policy_hits)
+            elif pending["action"] == "cancel":
+                reply = compose_cancel_answer(result)
+            else:
+                reply = compose_address_answer(result)
+            return _pack(
+                reply,
+                pending["action"] if pending["action"] != "address" else "order",
+                order_id=pending.get("order_id"),
+                sources=sources_for_ui(policy_hits),
+                debug={"executed": pending["action"], "result": result, "idempotent": result.get("idempotent")},
+            )
+        if is_deny(message):
+            clear_pending(session_id)
+            return _pack(compose_denied_mutation(), "order", order_id=pending.get("order_id"))
+        if not looks_like_verify(message):
+            return _pack(compose_pending_reminder(pending), "order", order_id=pending.get("order_id"))
 
     graph = get_graph()
     config = {"configurable": {"thread_id": session_id}}
@@ -636,25 +742,13 @@ async def chat(session_id: str, message: str) -> dict:
     reply = str(last.content)
     agent = result.get("last_agent") or result.get("next_agent")
     debug = result.get("debug") or {}
-
-    append_chat_log(
-        session_id,
-        "assistant",
+    packed = _pack(
         reply,
-        agent=agent,
-        meta={
-            "order_id": result.get("order_id"),
-            "payment_id": result.get("payment_id"),
-            **debug,
-        },
+        agent,
+        order_id=result.get("order_id"),
+        payment_id=result.get("payment_id"),
+        sources=result.get("sources") or [],
+        debug=debug,
     )
-    return {
-        "session_id": session_id,
-        "reply": reply,
-        "agent": agent,
-        "order_id": result.get("order_id"),
-        "payment_id": result.get("payment_id"),
-        "sources": result.get("sources") or [],
-        "bot_paused": is_bot_paused(session_id),
-        "debug": debug,
-    }
+    packed["debug"] = debug
+    return packed

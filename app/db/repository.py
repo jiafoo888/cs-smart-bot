@@ -169,47 +169,26 @@ def create_ticket(
     summary: str,
     category: str = "other",
     order_id: str | None = None,
+    *,
+    over_limit: bool = False,
 ) -> dict:
-    import secrets
+    from app.trust import create_sla_ticket
 
-    tid = "T-" + secrets.token_hex(3).upper()
-    with SyncSessionLocal() as db:
-        ticket = Ticket(
-            ticket_id=tid,
-            session_id=session_id,
-            order_id=order_id.upper() if order_id else None,
-            category=category,
-            status="open",
-            summary=summary[:500],
-        )
-        db.add(ticket)
-        db.commit()
-        db.refresh(ticket)
-        return {
-            "ticket_id": ticket.ticket_id,
-            "session_id": ticket.session_id,
-            "order_id": ticket.order_id,
-            "category": ticket.category,
-            "status": ticket.status,
-            "summary": ticket.summary,
-        }
+    return create_sla_ticket(
+        session_id,
+        summary,
+        category=category,
+        order_id=order_id,
+        over_limit=over_limit,
+    )
 
 
 def list_tickets(limit: int = 50) -> list[dict]:
+    from app.trust import _ticket_dict
+
     with SyncSessionLocal() as db:
         rows = db.scalars(select(Ticket).order_by(Ticket.created_at.desc()).limit(limit)).all()
-        return [
-            {
-                "ticket_id": t.ticket_id,
-                "session_id": t.session_id,
-                "order_id": t.order_id,
-                "category": t.category,
-                "status": t.status,
-                "summary": t.summary,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
-            }
-            for t in rows
-        ]
+        return [_ticket_dict(t) for t in rows]
 
 
 def append_chat_log(
@@ -219,13 +198,16 @@ def append_chat_log(
     agent: str | None = None,
     meta: dict | None = None,
 ) -> None:
+    from app.pii import redact_free_text
+
+    stored = redact_free_text(content) if role != "system" else content
     with SyncSessionLocal() as db:
         db.add(
             ChatLog(
                 session_id=session_id,
                 role=role,
                 agent=agent,
-                content=content,
+                content=stored,
                 meta_json=json.dumps(meta, ensure_ascii=False) if meta else None,
             )
         )
@@ -259,6 +241,13 @@ def _order_to_dict(order: Order | None, include_payments: bool = False) -> dict 
         "order_id": order.order_id,
         "customer_id": order.customer_id,
         "customer_name": order.customer.name if order.customer else None,
+        "customer_email": order.customer.email if order.customer else None,
+        "customer_phone": order.customer.phone if order.customer else None,
+        "customer_tier": (
+            order.customer.tier
+            if order.customer and getattr(order.customer, "tier", None)
+            else None
+        ),
         "product": order.product,
         "quantity": order.quantity,
         "amount": order.amount,

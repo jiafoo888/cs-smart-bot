@@ -59,6 +59,7 @@
           <li data-node="payment">Payments</li>
           <li data-node="refund">Refunds</li>
           <li data-node="loyalty">Loyalty</li>
+          <li data-node="verify">Identity gate</li>
           <li data-node="escalate">Human desk</li>
           <li data-node="handoff">Bot paused</li>
         </ol>
@@ -73,8 +74,11 @@
           <button type="button" data-q="I want to exchange ORD-1005">Exchange</button>
           <button type="button" data-q="Please nudge fulfillment for ORD-1004">Nudge ship</button>
           <button type="button" data-q="What are my loyalty points and coupons?">Points & coupons</button>
-          <button type="button" data-q="Please refund ORD-1002">Refund</button>
-          <button type="button" data-q="Cancel order ORD-1003">Cancel</button>
+          <button type="button" data-q="Check order ORD-1001">Lookup ORD-1001</button>
+          <button type="button" data-q="verify 1001">Verify phone · 1001</button>
+          <button type="button" data-q="Please refund ORD-1002">Refund ORD-1002</button>
+          <button type="button" data-q="Cancel order ORD-1003">Cancel ORD-1003</button>
+          <button type="button" data-q="Please refund ORD-1005">VIP refund ORD-1005</button>
           <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate</button>
           <button type="button" data-q="I'd rate this chat 5 stars">Rate 5★</button>
         </div>
@@ -119,13 +123,23 @@
             <div><dt>Payment</dt><dd id="ctxPayment">—</dd></div>
             <div><dt>Last agent</dt><dd id="ctxAgent">—</dd></div>
             <div><dt>Bot</dt><dd id="ctxBot">active</dd></div>
+            <div><dt>Verified</dt><dd id="ctxVerified">no</dd></div>
+            <div><dt>Tier</dt><dd id="ctxTier">—</dd></div>
+            <div><dt>Pending</dt><dd id="ctxPending">—</dd></div>
           </dl>
         </article>
+        <article class="panel-block">
+          <h3>Customer 360</h3>
+          <p class="muted small" id="profileHint">Lookup an order to bind this session, then verify to unlock PII.</p>
+          <dl class="kv" id="profileKv"></dl>
+        </article>
         <article class="panel-block" id="handoffPanel">
-          <h3>Human takeover</h3>
-          <p class="muted small">After escalate, the bot pauses. Reply as human agent here.</p>
+          <h3>Human takeover / Agent assist</h3>
+          <p class="muted small">After escalate or over-limit refunds, the bot pauses. Draft is grounded in policy + 360.</p>
+          <div id="assistBox" class="assist-box">No assist draft yet.</div>
           <textarea id="humanMsg" rows="3" placeholder="Human agent reply…" class="human-box"></textarea>
           <div class="handoff-actions">
+            <button type="button" class="ghost" id="btnUseDraft">Use draft</button>
             <button type="button" class="ghost" id="btnHumanReply">Send as human</button>
             <button type="button" class="ghost" id="btnResumeBot">Resume bot</button>
           </div>

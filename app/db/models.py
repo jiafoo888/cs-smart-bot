@@ -21,6 +21,7 @@ class Customer(Base):
     email: Mapped[str] = mapped_column(String(128))
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     loyalty_points: Mapped[int] = mapped_column(Integer, default=0)
+    tier: Mapped[str] = mapped_column(String(16), default="standard")  # standard | gold | vip
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     orders: Mapped[list[Order]] = relationship(back_populates="customer")
@@ -85,6 +86,10 @@ class Ticket(Base):
     category: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default="open")
     summary: Mapped[str] = mapped_column(Text)
+    priority: Mapped[str] = mapped_column(String(16), default="normal")  # low | normal | high | urgent
+    sla_minutes: Mapped[int] = mapped_column(Integer, default=30)
+    sla_due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    assigned_to: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     order: Mapped[Order | None] = relationship(back_populates="tickets")
@@ -184,3 +189,41 @@ class SessionHandoff(Base):
     paused_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     resumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_human_reply: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class SessionIdentity(Base):
+    """Per-session verification gate before PII or mutations."""
+
+    __tablename__ = "session_identities"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    customer_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    order_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    verified_via: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class PendingAction(Base):
+    """Irreversible tool call waiting for customer YES / specialist approval."""
+
+    __tablename__ = "pending_actions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    action: Mapped[str] = mapped_column(String(32))
+    order_id: Mapped[str] = mapped_column(String(32), index=True)
+    amount: Mapped[float] = mapped_column(Float, default=0)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ToolIdempotency(Base):
+    __tablename__ = "tool_idempotency"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    idem_key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    result_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

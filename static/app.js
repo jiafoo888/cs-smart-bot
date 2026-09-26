@@ -15,7 +15,8 @@ function setPipeline(agent) {
     const on =
       node === "supervisor" ||
       node === agent ||
-      (agent === "csat" && node === "smalltalk");
+      (agent === "csat" && node === "smalltalk") ||
+      (agent === "verify" && node === "verify");
     li.classList.toggle("active", on);
   });
 }
@@ -71,11 +72,14 @@ async function sendChat(message) {
     $("ctxPayment").textContent = data.payment_id || "—";
     $("ctxAgent").textContent = data.agent || "—";
     $("ctxBot").textContent = data.bot_paused ? "paused (human)" : "active";
+    $("ctxVerified").textContent = data.verified ? "yes" : "no";
+    $("ctxTier").textContent = data.customer_tier || "—";
+    $("ctxPending").textContent = data.pending_action || "—";
     setPipeline(data.agent);
     if (include_debug) {
       $("opsDebug").textContent = JSON.stringify(data.debug || {}, null, 2);
     }
-    await Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics()]);
+    await Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics(), loadProfile(), loadAssist()]);
   } catch (err) {
     typing.remove();
     addMessage("bot", "Request failed: " + err.message);
@@ -115,8 +119,9 @@ async function loadTickets() {
     ? data.items
         .map(
           (t) => `<div class="row-card"><strong>${t.ticket_id}</strong>
-          <span class="badge ${badgeClass(t.status)}">${t.status}</span><br/>
-          ${t.category} · ${t.order_id || "—"}<br/>${t.summary}</div>`
+          <span class="badge ${badgeClass(t.status)}">${t.status}</span>
+          <span class="badge ${t.sla_status === "breached" ? "bad" : t.priority === "urgent" ? "urgent" : "warn"}">${t.priority || "normal"} · ${t.sla_status || "sla"}</span><br/>
+          ${t.category} · ${t.order_id || "—"} · SLA ${t.sla_minutes || "—"}m<br/>${t.summary}</div>`
         )
         .join("")
     : `<div class="row-card">No tickets yet</div>`;
@@ -128,7 +133,37 @@ async function loadMetrics() {
   $("mOrders").textContent = data.orders_total ?? "—";
   $("mPay").textContent = data.payments_succeeded ?? "—";
   $("mChunks").textContent = data.kb?.chunk_count ?? "—";
-  $("mTickets").textContent = data.tickets_open ?? "—";
+  const open = data.tickets_open ?? "—";
+  const breach = data.tickets_sla_breached ?? 0;
+  $("mTickets").textContent = breach ? `${open} (${breach} SLA)` : open;
+}
+
+async function loadProfile() {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/profile`);
+  const data = await res.json();
+  if (!data.customer_id) {
+    $("profileHint").textContent = "Lookup an order to bind this session, then verify to unlock PII.";
+    $("profileKv").innerHTML = "";
+    return;
+  }
+  $("profileHint").textContent = `${data.name} · ${data.tier} · LTV ¥${data.lifetime_value}`;
+  $("profileKv").innerHTML = `
+    <div><dt>Customer</dt><dd>${data.customer_id}</dd></div>
+    <div><dt>Email</dt><dd>${data.email_masked || data.email}</dd></div>
+    <div><dt>Phone</dt><dd>${data.phone_masked || "—"}</dd></div>
+    <div><dt>Points</dt><dd>${data.loyalty_points}</dd></div>
+    <div><dt>Orders</dt><dd>${data.orders_count}</dd></div>
+    <div><dt>Open tickets</dt><dd>${data.open_tickets}</dd></div>`;
+}
+
+async function loadAssist() {
+  const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/assist`);
+  const data = await res.json();
+  window.__assistDraft = data.suggested_reply || "";
+  const pending = data.pending
+    ? `Pending ${data.pending.action} ${data.pending.order_id} (¥${data.pending.amount})`
+    : "No pending mutation";
+  $("assistBox").textContent = `${pending}\n\n${data.suggested_reply || ""}`;
 }
 
 async function loadKb() {
@@ -187,7 +222,12 @@ document.querySelectorAll(".session").forEach((btn) => {
     $("ctxPayment").textContent = "—";
     $("ctxAgent").textContent = "—";
     $("ctxBot").textContent = "active";
+    $("ctxVerified").textContent = "no";
+    $("ctxTier").textContent = "—";
+    $("ctxPending").textContent = "—";
     setPipeline(null);
+    loadProfile();
+    loadAssist();
   });
 });
 
@@ -213,6 +253,10 @@ $("kbSearchForm").addEventListener("submit", async (e) => {
     )
     .join("") || `<div class="row-card">No hits</div>`;
 });
+
+$("btnUseDraft").onclick = () => {
+  $("humanMsg").value = window.__assistDraft || "";
+};
 
 $("btnHumanReply").onclick = async () => {
   const message = $("humanMsg").value.trim();
@@ -262,7 +306,7 @@ $("btnReseed").onclick = async () => {
   await Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics()]);
 };
 
-Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics(), loadKb(), loadHealth()]);
+Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics(), loadKb(), loadHealth(), loadProfile(), loadAssist()]);
 addMessage(
   "bot",
   "Hi — welcome to SteelShop Care. I can answer store policies from our knowledge base, look up orders and payments, process refunds, or escalate to a human specialist."

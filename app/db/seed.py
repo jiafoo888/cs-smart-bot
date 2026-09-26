@@ -14,9 +14,12 @@ from app.db.models import (
     Invoice,
     Order,
     Payment,
+    PendingAction,
     SatisfactionRating,
     SessionHandoff,
+    SessionIdentity,
     Ticket,
+    ToolIdempotency,
     TrackingEvent,
 )
 from app.db.session import SyncSessionLocal, init_db
@@ -27,9 +30,13 @@ def seed_all(force: bool = False) -> None:
     with SyncSessionLocal() as db:
         existing = db.scalar(select(Order).limit(1))
         if existing and not force:
+            _patch_live_demo_fields(db)
             return
         if force:
             for model in (
+                ToolIdempotency,
+                PendingAction,
+                SessionIdentity,
                 SatisfactionRating,
                 SessionHandoff,
                 ExchangeRequest,
@@ -52,6 +59,7 @@ def seed_all(force: bool = False) -> None:
                 email="alice@example.com",
                 phone="13800001001",
                 loyalty_points=1280,
+                tier="gold",
                 created_at=now - timedelta(days=120),
             ),
             Customer(
@@ -60,6 +68,7 @@ def seed_all(force: bool = False) -> None:
                 email="bob@example.com",
                 phone="13800001002",
                 loyalty_points=420,
+                tier="standard",
                 created_at=now - timedelta(days=80),
             ),
             Customer(
@@ -68,6 +77,7 @@ def seed_all(force: bool = False) -> None:
                 email="carol@example.com",
                 phone="13800001003",
                 loyalty_points=90,
+                tier="standard",
                 created_at=now - timedelta(days=40),
             ),
             Customer(
@@ -76,6 +86,7 @@ def seed_all(force: bool = False) -> None:
                 email="david@example.com",
                 phone="13800001004",
                 loyalty_points=2100,
+                tier="vip",
                 created_at=now - timedelta(days=15),
             ),
         ]
@@ -295,7 +306,52 @@ def seed_all(force: bool = False) -> None:
             ),
         ]
         db.add_all(coupons)
+
+        db.add(
+            Ticket(
+                ticket_id="T-SEED01",
+                session_id="care-demo-vip",
+                order_id="ORD-1005",
+                category="complaint",
+                status="open",
+                summary="VIP chair delivery follow-up (seeded SLA demo)",
+                priority="urgent",
+                sla_minutes=5,
+                sla_due_at=now - timedelta(minutes=20),
+                assigned_to="human_queue",
+                created_at=now - timedelta(hours=1),
+            )
+        )
         db.commit()
+
+
+def _patch_live_demo_fields(db) -> None:
+    """Fill new columns on an already-seeded SQLite file."""
+    tiers = {
+        "CUS-001": "gold",
+        "CUS-002": "standard",
+        "CUS-003": "standard",
+        "CUS-004": "vip",
+    }
+    for c in db.scalars(select(Customer)).all():
+        if c.customer_id in tiers:
+            c.tier = tiers[c.customer_id]
+    if not db.scalar(select(Ticket).where(Ticket.ticket_id == "T-SEED01")):
+        db.add(
+            Ticket(
+                ticket_id="T-SEED01",
+                session_id="care-demo-vip",
+                order_id="ORD-1005",
+                category="complaint",
+                status="open",
+                summary="VIP chair delivery follow-up (seeded SLA demo)",
+                priority="urgent",
+                sla_minutes=5,
+                sla_due_at=datetime.utcnow() - timedelta(minutes=20),
+                assigned_to="human_queue",
+            )
+        )
+    db.commit()
 
 
 def seed_orders(force: bool = False) -> None:
