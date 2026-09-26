@@ -310,7 +310,7 @@ def seed_all(force: bool = False) -> None:
         db.add(
             Ticket(
                 ticket_id="T-SEED01",
-                session_id="care-demo-vip",
+                session_id="care-demo-1",
                 order_id="ORD-1005",
                 category="complaint",
                 status="open",
@@ -336,11 +336,12 @@ def _patch_live_demo_fields(db) -> None:
     for c in db.scalars(select(Customer)).all():
         if c.customer_id in tiers:
             c.tier = tiers[c.customer_id]
-    if not db.scalar(select(Ticket).where(Ticket.ticket_id == "T-SEED01")):
+    seed_ticket = db.scalar(select(Ticket).where(Ticket.ticket_id == "T-SEED01"))
+    if not seed_ticket:
         db.add(
             Ticket(
                 ticket_id="T-SEED01",
-                session_id="care-demo-vip",
+                session_id="care-demo-1",
                 order_id="ORD-1005",
                 category="complaint",
                 status="open",
@@ -351,6 +352,8 @@ def _patch_live_demo_fields(db) -> None:
                 assigned_to="human_queue",
             )
         )
+    else:
+        seed_ticket.session_id = "care-demo-1"
     db.commit()
 
 

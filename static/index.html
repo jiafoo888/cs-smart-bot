@@ -3,28 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SteelShop Care Console</title>
+  <title>SteelShop Care</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <div class="atmosphere" aria-hidden="true"></div>
-
   <header class="topbar">
     <div class="brand-block">
       <div class="logo-mark" aria-hidden="true"></div>
       <div>
         <p class="brand">SteelShop Care</p>
-        <p class="brand-sub">Support console · queue desk</p>
+        <p class="brand-sub">Customer support</p>
       </div>
     </div>
     <div class="top-metrics" id="topMetrics">
       <div class="metric"><span class="m-label">Orders</span><strong id="mOrders">—</strong></div>
       <div class="metric"><span class="m-label">Payments</span><strong id="mPay">—</strong></div>
-      <div class="metric"><span class="m-label">KB docs</span><strong id="mChunks">—</strong></div>
-      <div class="metric"><span class="m-label">Open tickets</span><strong id="mTickets">—</strong></div>
+      <div class="metric"><span class="m-label">Tickets</span><strong id="mTickets">—</strong></div>
     </div>
     <div class="top-actions">
       <span class="live-pill"><i></i> Online</span>
@@ -38,19 +35,15 @@
   <main class="workspace">
     <aside class="rail">
       <section class="rail-section">
-        <h2>Queue</h2>
-        <button class="session active" data-session="care-demo-1" type="button">
-          <strong>Web chat · Guest</strong>
-          <span>care-demo-1</span>
-        </button>
-        <button class="session" data-session="care-demo-vip" type="button">
-          <strong>Priority · VIP</strong>
-          <span>care-demo-vip</span>
-        </button>
+        <h2>Conversation</h2>
+        <div class="session active" id="sessionCard">
+          <strong>Web chat</strong>
+          <span id="sessionLabel">care-demo-1</span>
+        </div>
       </section>
 
       <section class="rail-section">
-        <h2>Active route</h2>
+        <h2>Route</h2>
         <ol class="pipeline" id="pipeline">
           <li data-node="supervisor">Router</li>
           <li data-node="smalltalk">Greeting</li>
@@ -65,22 +58,19 @@
         </ol>
       </section>
 
-      <section class="rail-section stack-gap">
-        <h2>Macros</h2>
+      <section class="rail-section">
+        <h2>Try</h2>
         <div class="chips" id="quickIntents">
           <button type="button" data-q="What is the return policy window?">Return policy</button>
           <button type="button" data-q="Check order ORD-1001">Order ORD-1001</button>
-          <button type="button" data-q="verify 1001">Verify · last4 1001</button>
-          <button type="button" data-q="Show tracking timeline for ORD-1001">Tracking ORD-1001</button>
-          <button type="button" data-q="Issue an invoice for ORD-1002">Invoice ORD-1002</button>
+          <button type="button" data-q="verify 1001">Verify · 1001</button>
+          <button type="button" data-q="Show tracking timeline for ORD-1001">Tracking</button>
           <button type="button" data-q="Please refund ORD-1002">Refund ORD-1002</button>
           <button type="button" data-q="Cancel order ORD-1003">Cancel ORD-1003</button>
-          <button type="button" data-q="Please refund ORD-1005">Refund ORD-1005 (VIP)</button>
-          <button type="button" data-q="I want to exchange ORD-1005">Exchange ORD-1005</button>
-          <button type="button" data-q="Please nudge fulfillment for ORD-1004">Nudge ORD-1004</button>
-          <button type="button" data-q="What are my loyalty points and coupons?">Loyalty / coupons</button>
+          <button type="button" data-q="Check order ORD-1005">VIP order ORD-1005</button>
+          <button type="button" data-q="verify 1004">Verify VIP · 1004</button>
+          <button type="button" data-q="Please refund ORD-1005">Refund ORD-1005</button>
           <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate</button>
-          <button type="button" data-q="I'd rate this chat 5 stars">CSAT 5</button>
         </div>
       </section>
     </aside>
@@ -88,20 +78,22 @@
     <section class="stage">
       <div class="stage-head">
         <div>
-          <h1>Case thread</h1>
-          <p class="muted" id="sessionLabel">session · care-demo-1</p>
+          <h1>Thread</h1>
+          <p class="muted" id="threadHint">Same inbox for all customers — VIP appears after verifying ORD-1005</p>
         </div>
+        <div class="route-pill" id="routePill">router</div>
       </div>
 
-      <div class="stage-scroll">
+      <div class="stage-scroll" id="stageScroll">
+        <div class="stage-glow" aria-hidden="true"></div>
         <div id="messages" class="messages" aria-live="polite"></div>
       </div>
 
       <form id="chatForm" class="composer">
         <div class="composer-shell">
-          <textarea id="messageInput" rows="2" placeholder="Message customer… (ORD-xxxx / PAY-xxxx / policy / escalate)"></textarea>
+          <textarea id="messageInput" rows="2" placeholder="Ask about an order, policy, refund…"></textarea>
           <div class="composer-bar">
-            <span class="hint">Enter send · Shift+Enter newline</span>
+            <span class="hint">Enter to send</span>
             <button type="submit" id="sendBtn">Send</button>
           </div>
         </div>
@@ -111,13 +103,12 @@
     <aside class="context">
       <div class="tabs" role="tablist">
         <button type="button" class="tab active" data-tab="context">Case</button>
-        <button type="button" class="tab" data-tab="knowledge">KB</button>
         <button type="button" class="tab" data-tab="ops">Ops</button>
       </div>
 
       <div class="tab-panel active" id="panel-context">
         <article class="panel-block">
-          <h3>Session fields</h3>
+          <h3>Session</h3>
           <dl class="kv" id="contextKv">
             <div><dt>Order</dt><dd id="ctxOrder">—</dd></div>
             <div><dt>Payment</dt><dd id="ctxPayment">—</dd></div>
@@ -129,13 +120,13 @@
           </dl>
         </article>
         <article class="panel-block">
-          <h3>Account 360</h3>
-          <p class="muted small" id="profileHint">Bind an order, then verify to unlock PII.</p>
+          <h3>Account</h3>
+          <p class="muted small" id="profileHint">Look up an order, then verify. ORD-1005 is VIP.</p>
           <dl class="kv" id="profileKv"></dl>
         </article>
         <article class="panel-block" id="handoffPanel">
           <h3>Agent assist</h3>
-          <p class="muted small">Used after escalate / over-limit refund. Bot pauses until resume.</p>
+          <p class="muted small">After escalate / over-limit refund, reply here.</p>
           <div id="assistBox" class="assist-box">No draft yet.</div>
           <textarea id="humanMsg" rows="3" placeholder="Agent reply…" class="human-box"></textarea>
           <div class="handoff-actions">
@@ -153,7 +144,6 @@
             <button type="button" data-score="4">4</button>
             <button type="button" data-score="5">5</button>
           </div>
-          <p class="muted small" id="csatHint">Rate session 1–5</p>
         </article>
         <article class="panel-block">
           <div class="row-head">
@@ -164,13 +154,6 @@
         </article>
         <article class="panel-block">
           <div class="row-head">
-            <h3>Payments</h3>
-            <button type="button" class="ghost" id="refreshPayments">Refresh</button>
-          </div>
-          <div id="payments" class="feed"></div>
-        </article>
-        <article class="panel-block">
-          <div class="row-head">
             <h3>Tickets</h3>
             <button type="button" class="ghost" id="refreshTickets">Refresh</button>
           </div>
@@ -178,9 +161,9 @@
         </article>
       </div>
 
-      <div class="tab-panel" id="panel-knowledge">
+      <div class="tab-panel" id="panel-ops">
         <article class="panel-block">
-          <h3>Policy corpus</h3>
+          <h3>Knowledge base</h3>
           <p class="muted small" id="kbSummary">Loading…</p>
           <div class="kb-knobs" id="kbKnobs"></div>
           <div id="kbDocs" class="feed"></div>
@@ -193,15 +176,12 @@
           </form>
           <div id="kbHits" class="feed"></div>
         </article>
-      </div>
-
-      <div class="tab-panel" id="panel-ops">
         <article class="panel-block">
           <h3>Runtime</h3>
           <pre class="ops-pre" id="opsHealth">…</pre>
         </article>
         <article class="panel-block">
-          <h3>Last debug payload</h3>
+          <h3>Debug</h3>
           <pre class="ops-pre" id="opsDebug">Enable Debug, then send a message.</pre>
         </article>
         <article class="panel-block actions">

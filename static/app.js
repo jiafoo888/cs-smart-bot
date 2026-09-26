@@ -1,12 +1,20 @@
 const $ = (id) => document.getElementById(id);
 
-let sessionId = "care-demo-1";
+const sessionId = "care-demo-1";
 
 function badgeClass(status) {
   const s = (status || "").toLowerCase();
-  if (["succeeded", "delivered", "shipped", "paid", "closed"].includes(s)) return "ok";
+  if (["succeeded", "delivered", "shipped", "paid", "closed", "resolved"].includes(s)) return "ok";
   if (["pending", "processing", "open", "assigned"].includes(s)) return "warn";
   return "bad";
+}
+
+function scrollChat() {
+  const scroller = $("stageScroll");
+  if (!scroller) return;
+  requestAnimationFrame(() => {
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+  });
 }
 
 function setPipeline(agent) {
@@ -19,13 +27,27 @@ function setPipeline(agent) {
       (agent === "verify" && node === "verify");
     li.classList.toggle("active", on);
   });
+  const pill = $("routePill");
+  if (pill) {
+    pill.textContent = agent || "router";
+    pill.classList.remove("flash");
+    void pill.offsetWidth;
+    pill.classList.add("flash");
+  }
 }
 
 function addMessage(role, text, opts = {}) {
   const box = $("messages");
   const el = document.createElement("div");
-  el.className = `bubble ${role === "user" ? "user" : "bot"}${opts.typing ? " typing" : ""}`;
-  el.textContent = text;
+  const kind = opts.human ? "human" : role === "user" ? "user" : "bot";
+  el.className = `bubble ${kind}${opts.typing ? " typing" : ""}`;
+
+  if (opts.typing) {
+    el.innerHTML = '<span class="typing-dots" aria-label="typing"><i></i><i></i><i></i></span>';
+  } else {
+    el.textContent = text;
+  }
+
   if (opts.sources?.length) {
     const wrap = document.createElement("div");
     wrap.className = "sources";
@@ -44,18 +66,29 @@ function addMessage(role, text, opts = {}) {
     el.appendChild(d);
   }
   box.appendChild(el);
-  const scroller = box.parentElement;
-  if (scroller) scroller.scrollTop = scroller.scrollHeight;
-  else box.scrollTop = box.scrollHeight;
+  scrollChat();
   return el;
+}
+
+function updateContext(data) {
+  $("ctxOrder").textContent = data.order_id || "—";
+  $("ctxPayment").textContent = data.payment_id || "—";
+  $("ctxAgent").textContent = data.agent || "—";
+  $("ctxBot").textContent = data.bot_paused ? "paused (human)" : "active";
+  $("ctxVerified").textContent = data.verified ? "yes" : "no";
+  const tier = data.customer_tier || "—";
+  $("ctxTier").textContent = tier;
+  $("ctxTier").classList.toggle("vip", String(tier).toLowerCase() === "vip");
+  $("ctxPending").textContent = data.pending_action || "—";
 }
 
 async function sendChat(message) {
   const include_debug = $("debugToggle").checked;
   addMessage("user", message);
   $("messageInput").value = "";
-  const typing = addMessage("bot", "Working…", { typing: true });
+  const typing = addMessage("bot", "", { typing: true });
   $("sendBtn").disabled = true;
+  $("stageScroll")?.classList.add("busy");
   try {
     const res = await fetch("/chat", {
       method: "POST",
@@ -68,23 +101,18 @@ async function sendChat(message) {
       sources: data.sources || [],
       debug: include_debug ? data.debug : null,
     });
-    $("ctxOrder").textContent = data.order_id || "—";
-    $("ctxPayment").textContent = data.payment_id || "—";
-    $("ctxAgent").textContent = data.agent || "—";
-    $("ctxBot").textContent = data.bot_paused ? "paused (human)" : "active";
-    $("ctxVerified").textContent = data.verified ? "yes" : "no";
-    $("ctxTier").textContent = data.customer_tier || "—";
-    $("ctxPending").textContent = data.pending_action || "—";
+    updateContext(data);
     setPipeline(data.agent);
     if (include_debug) {
       $("opsDebug").textContent = JSON.stringify(data.debug || {}, null, 2);
     }
-    await Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics(), loadProfile(), loadAssist()]);
+    await Promise.all([loadOrders(), loadTickets(), loadMetrics(), loadProfile(), loadAssist()]);
   } catch (err) {
     typing.remove();
     addMessage("bot", "Request failed: " + err.message);
   } finally {
     $("sendBtn").disabled = false;
+    $("stageScroll")?.classList.remove("busy");
   }
 }
 
@@ -92,23 +120,15 @@ async function loadOrders() {
   const res = await fetch("/api/orders");
   const data = await res.json();
   $("orders").innerHTML = (data.items || [])
-    .map(
-      (o) => `<div class="row-card"><strong>${o.order_id}</strong>
-      <span class="badge ${badgeClass(o.status)}">${o.status}</span><br/>
-      ${o.product} · ¥${o.amount}<br/>${o.customer_name || o.customer_id}</div>`
-    )
-    .join("");
-}
-
-async function loadPayments() {
-  const res = await fetch("/api/payments");
-  const data = await res.json();
-  $("payments").innerHTML = (data.items || [])
-    .map(
-      (p) => `<div class="row-card"><strong>${p.payment_id}</strong>
-      <span class="badge ${badgeClass(p.status)}">${p.status}</span><br/>
-      ${p.order_id} · ¥${p.amount} · ${p.method}</div>`
-    )
+    .map((o) => {
+      const vip =
+        (o.customer_tier || "").toLowerCase() === "vip"
+          ? '<span class="badge vip">vip</span>'
+          : "";
+      return `<div class="row-card"><strong>${o.order_id}</strong>
+      <span class="badge ${badgeClass(o.status)}">${o.status}</span>${vip}<br/>
+      ${o.product} · ¥${o.amount}<br/>${o.customer_name || o.customer_id}</div>`;
+    })
     .join("");
 }
 
@@ -132,7 +152,6 @@ async function loadMetrics() {
   const data = await res.json();
   $("mOrders").textContent = data.orders_total ?? "—";
   $("mPay").textContent = data.payments_succeeded ?? "—";
-  $("mChunks").textContent = data.kb?.chunk_count ?? "—";
   const open = data.tickets_open ?? "—";
   const breach = data.tickets_sla_breached ?? 0;
   $("mTickets").textContent = breach ? `${open} (${breach} SLA)` : open;
@@ -142,18 +161,19 @@ async function loadProfile() {
   const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/profile`);
   const data = await res.json();
   if (!data.customer_id) {
-    $("profileHint").textContent = "Lookup an order to bind this session, then verify to unlock PII.";
+    $("profileHint").textContent = "Look up an order, then verify. ORD-1005 is VIP.";
     $("profileKv").innerHTML = "";
     return;
   }
-  $("profileHint").textContent = `${data.name} · ${data.tier} · LTV ¥${data.lifetime_value}`;
+  const tier = data.tier || "standard";
+  $("profileHint").textContent = `${data.name} · ${tier} · LTV ¥${data.lifetime_value}`;
   $("profileKv").innerHTML = `
     <div><dt>Customer</dt><dd>${data.customer_id}</dd></div>
+    <div><dt>Tier</dt><dd class="${tier === "vip" ? "vip" : ""}">${tier}</dd></div>
     <div><dt>Email</dt><dd>${data.email_masked || data.email}</dd></div>
     <div><dt>Phone</dt><dd>${data.phone_masked || "—"}</dd></div>
     <div><dt>Points</dt><dd>${data.loyalty_points}</dd></div>
-    <div><dt>Orders</dt><dd>${data.orders_count}</dd></div>
-    <div><dt>Open tickets</dt><dd>${data.open_tickets}</dd></div>`;
+    <div><dt>Orders</dt><dd>${data.orders_count}</dd></div>`;
 }
 
 async function loadAssist() {
@@ -170,9 +190,9 @@ async function loadKb() {
   const res = await fetch("/api/kb/stats");
   const data = await res.json();
   $("kbSummary").textContent =
-    `${data.document_count} policy documents · ${data.chunk_count} vectors · backend ${data.embedding_backend}`;
+    `${data.document_count} policy documents · ${data.chunk_count} vectors · ${data.embedding_backend}`;
   $("kbKnobs").innerHTML = `
-    <div class="knob"><span>chunk size</span><strong>${data.chunk_size}</strong></div>
+    <div class="knob"><span>chunk</span><strong>${data.chunk_size}</strong></div>
     <div class="knob"><span>overlap</span><strong>${data.chunk_overlap}</strong></div>
     <div class="knob"><span>top_k</span><strong>${data.top_k}</strong></div>`;
   $("kbDocs").innerHTML = (data.documents || [])
@@ -207,30 +227,6 @@ document.querySelectorAll("#quickIntents button").forEach((btn) => {
   btn.addEventListener("click", () => sendChat(btn.dataset.q));
 });
 
-document.querySelectorAll(".session").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    document.querySelectorAll(".session").forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-    sessionId = btn.dataset.session;
-    $("sessionLabel").textContent = `session · ${sessionId}`;
-    $("messages").innerHTML = "";
-    addMessage(
-      "bot",
-      "SteelShop Care online. Ask about policies, orders, payments, refunds, or escalate to an agent."
-    );
-    $("ctxOrder").textContent = "—";
-    $("ctxPayment").textContent = "—";
-    $("ctxAgent").textContent = "—";
-    $("ctxBot").textContent = "active";
-    $("ctxVerified").textContent = "no";
-    $("ctxTier").textContent = "—";
-    $("ctxPending").textContent = "—";
-    setPipeline(null);
-    loadProfile();
-    loadAssist();
-  });
-});
-
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
@@ -246,12 +242,13 @@ $("kbSearchForm").addEventListener("submit", async (e) => {
   if (!q) return;
   const res = await fetch("/api/policies/search?" + new URLSearchParams({ q }));
   const data = await res.json();
-  $("kbHits").innerHTML = (data.hits || [])
-    .map(
-      (h) => `<div class="row-card"><strong>${h.section || h.source}</strong>
+  $("kbHits").innerHTML =
+    (data.hits || [])
+      .map(
+        (h) => `<div class="row-card"><strong>${h.section || h.source}</strong>
       <span class="badge warn">${h.category}</span><br/>${(h.text || "").slice(0, 160)}…</div>`
-    )
-    .join("") || `<div class="row-card">No hits</div>`;
+      )
+      .join("") || `<div class="row-card">No hits</div>`;
 });
 
 $("btnUseDraft").onclick = () => {
@@ -268,7 +265,7 @@ $("btnHumanReply").onclick = async () => {
   });
   const data = await res.json();
   $("humanMsg").value = "";
-  addMessage("bot", `[Human agent]\n${data.message}`);
+  addMessage("bot", `[Agent]\n${data.message}`, { human: true });
   $("ctxBot").textContent = data.bot_paused ? "paused (human)" : "active";
   setPipeline("handoff");
 };
@@ -276,19 +273,17 @@ $("btnHumanReply").onclick = async () => {
 $("btnResumeBot").onclick = async () => {
   await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/resume-bot`, { method: "POST" });
   $("ctxBot").textContent = "active";
-  addMessage("bot", "Bot resumed — I can take it from here.");
+  addMessage("bot", "Bot resumed.");
   setPipeline("supervisor");
 };
 
 document.querySelectorAll("#csatStars button").forEach((btn) => {
   btn.addEventListener("click", async () => {
-    const score = btn.dataset.score;
-    await sendChat(`I'd rate this chat ${score} stars`);
+    await sendChat(`I'd rate this chat ${btn.dataset.score} stars`);
   });
 });
 
 $("refreshOrders").onclick = loadOrders;
-$("refreshPayments").onclick = loadPayments;
 $("refreshTickets").onclick = loadTickets;
 
 $("btnReingest").onclick = async () => {
@@ -303,12 +298,12 @@ $("btnReingest").onclick = async () => {
 
 $("btnReseed").onclick = async () => {
   await fetch("/api/admin/reseed", { method: "POST" });
-  await Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics()]);
+  await Promise.all([loadOrders(), loadTickets(), loadMetrics()]);
 };
 
-Promise.all([loadOrders(), loadPayments(), loadTickets(), loadMetrics(), loadKb(), loadHealth(), loadProfile(), loadAssist()]);
+Promise.all([loadOrders(), loadTickets(), loadMetrics(), loadKb(), loadHealth(), loadProfile(), loadAssist()]);
 addMessage(
   "bot",
-  "SteelShop Care online. Ask about policies, orders, payments, refunds, or escalate to an agent."
+  "SteelShop Care online. Ask about policies, orders, payments, or refunds. VIP routing kicks in after you verify ORD-1005."
 );
 setPipeline("supervisor");
