@@ -148,6 +148,36 @@ def verify_session(session_id: str, token: str, order_id: str | None = None) -> 
             customer = db.scalar(
                 select(Customer).where(Customer.customer_id == ident["customer_id"])
             )
+        # Demo-friendly: resolve by phone last-4, else ORD-{last4}
+        if customer is None and token_n.isdigit() and len(token_n) == 4:
+            matches = [
+                c
+                for c in db.scalars(select(Customer)).all()
+                if re.sub(r"\D", "", c.phone or "").endswith(token_n)
+            ]
+            if len(matches) == 1:
+                customer = matches[0]
+                latest = db.scalar(
+                    select(Order)
+                    .where(Order.customer_id == customer.customer_id)
+                    .order_by(Order.created_at.desc())
+                )
+                if latest:
+                    oid = latest.order_id
+            elif len(matches) > 1:
+                return {
+                    "ok": False,
+                    "error": "That last-4 matches more than one account. Share an order id (e.g. ORD-1001) first.",
+                }
+            if customer is None:
+                guess_oid = f"ORD-{token_n}"
+                order = db.scalar(select(Order).where(Order.order_id == guess_oid))
+                if order:
+                    oid = order.order_id
+                    customer = db.scalar(
+                        select(Customer).where(Customer.customer_id == order.customer_id)
+                    )
+
         if customer is None:
             return {
                 "ok": False,
