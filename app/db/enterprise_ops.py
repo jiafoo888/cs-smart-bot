@@ -159,7 +159,7 @@ def get_loyalty(customer_id: str | None = None, order_id: str | None = None) -> 
         if not cid:
             return {
                 "ok": False,
-                "error": "Share an order id or verify the account first so I can load the right loyalty profile.",
+                "error": "Share an order id (e.g. ORD-1001) so I can load the right loyalty profile.",
             }
         customer = db.scalar(select(Customer).where(Customer.customer_id == cid))
         if not customer:

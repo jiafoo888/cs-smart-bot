@@ -87,7 +87,7 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
     return f"{body}{suffix}"
 
 
-def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified: bool = False) -> str:
+def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified: bool = True) -> str:
     pays = pays or data.get("payments") or []
     tracking = data.get("tracking_no")
     carrier = data.get("carrier")
@@ -104,19 +104,13 @@ def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified
             f"(¥{p0['amount']})."
         )
     addr = data.get("shipping_address") or "n/a"
-    verify_nudge = ""
-    if not verified:
-        verify_nudge = (
-            " Full address is hidden until you verify — reply with the last 4 digits "
-            "of the phone on this order (demo: 1001 for ORD-1001)."
-        )
     return (
         f"Here's what I see for {data['order_id']}: "
         f"{data['product']} (x{data.get('quantity', 1)}) for "
         f"¥{data['amount']} {data.get('currency', 'CNY')}, status {data['status']}. "
         f"Shipping: {ship}. "
         f"Address on file: {addr}."
-        f"{pay_bit}{verify_nudge}"
+        f"{pay_bit}"
     )
 
 
@@ -186,10 +180,9 @@ def compose_address_answer(result: dict) -> str:
 
 def compose_greeting() -> str:
     return (
-        "Hi! I'm SteelShop support. I can help with orders, payments, tracking, "
-        "invoices, exchanges, cancellations, loyalty points, returns, and policies. "
-        "For refunds, cancellations, or address changes I'll verify the account first "
-        "(last 4 of the phone on the order). What do you need today?"
+        "Hi! I'm SteelShop support. I can look up policies, product specs, compare items, "
+        "check orders/payments, handle refunds/cancellations, tracking, invoices, and loyalty. "
+        "Try “compare earbuds” or “specs for Ergonomic Chair”. What do you need?"
     )
 
 
@@ -310,10 +303,72 @@ def parse_csat_score(text: str) -> int | None:
     return None
 
 
+def compose_product_answer(result: dict) -> str:
+    if not result.get("ok"):
+        suggestions = result.get("suggestions") or []
+        if suggestions:
+            lines = "\n".join(
+                f"- {p['name']} ({p['sku']}) · ¥{p['price']}" for p in suggestions[:5]
+            )
+            return (
+                f"{result.get('error') or 'No exact product match.'}\n"
+                f"Closest catalog hits:\n{lines}\n"
+                "Ask again with a full name or SKU, or say “compare earbuds”."
+            )
+        return result.get("error") or "I couldn't find that product."
+    p = result["product"]
+    specs = p.get("specs") or {}
+    spec_line = ", ".join(f"{k}={v}" for k, v in list(specs.items())[:6])
+    highlights = "; ".join(p.get("highlights") or [])
+    return (
+        f"{p['name']} ({p['sku']}) — ¥{p['price']} {p.get('currency', 'CNY')}\n"
+        f"{p.get('summary')}\n"
+        f"Highlights: {highlights}\n"
+        f"Specs: {spec_line}\n"
+        f"Best for: {p.get('best_for')} · Warranty: {specs.get('warranty_months', 'n/a')} months\n"
+        f"In the box: {', '.join(p.get('in_box') or [])}\n"
+        f"Say “compare {p['compare_group']}” to see peer options."
+    )
+
+
+def compose_compare_answer(result: dict) -> str:
+    if not result.get("ok"):
+        return result.get("error") or "I couldn't compare those products."
+    if result.get("message") and not result.get("left"):
+        return result["message"]
+    left, right = result["left"], result["right"]
+    note = f" ({result['note']})" if result.get("note") else ""
+    rows = result.get("spec_rows") or []
+    table = "\n".join(
+        f"- {r['field']}: {left['name']}={r.get(left['sku'], '—')} | "
+        f"{right['name']}={r.get(right['sku'], '—')}"
+        for r in rows[:8]
+    )
+    return (
+        f"Compare{note}:\n"
+        f"• {left['name']} ({left['sku']}) — ¥{left['price']} — {left.get('best_for')}\n"
+        f"• {right['name']} ({right['sku']}) — ¥{right['price']} — {right.get('best_for')}\n"
+        f"Price delta: ¥{result.get('price_diff')}\n"
+        f"Specs:\n{table}\n"
+        f"{result.get('verdict')}"
+    )
+
+
+def compose_product_search_answer(result: dict) -> str:
+    items = result.get("items") or []
+    if not items:
+        return "No catalog matches. Try earbuds, keyboard, monitor arm, hub, or chair."
+    lines = "\n".join(
+        f"- {p['name']} ({p['sku']}) · ¥{p['price']} · {p.get('best_for')}" for p in items
+    )
+    q = result.get("query") or "catalog"
+    return f"Products for “{q}”:\n{lines}\nAsk for full specs on any name, or “compare …” two of them."
+
+
 def compose_off_topic() -> str:
     return (
-        "I'm here for SteelShop shopping support (orders, payments, shipping, returns). "
-        "I can't help with unrelated topics — want to check an order or a policy instead?"
+        "I'm here for SteelShop shopping support — policies, product specs/compare, "
+        "orders, payments, shipping, and returns. Want a product sheet or a policy lookup?"
     )
 
 

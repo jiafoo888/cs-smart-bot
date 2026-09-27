@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from app.catalog import compare_products, get_product, search_products
 from app.db.enterprise_ops import (
     get_loyalty,
     list_tracking_events,
@@ -88,8 +89,28 @@ def tool_save_satisfaction(session_id: str, score: int, comment: str = "") -> st
 
 
 def tool_search_company_policy(query: str) -> str:
-    hits = retrieve_faq(query, k=3)
+    hits = retrieve_faq(query, k=4)
     return format_context(hits)
+
+
+def tool_get_product(query: str) -> str:
+    product = get_product(query)
+    if not product:
+        hits = search_products(query, limit=5)
+        return json.dumps(
+            {"ok": False, "error": f"No exact match for “{query}”", "suggestions": hits},
+            ensure_ascii=False,
+        )
+    return json.dumps({"ok": True, "product": product}, ensure_ascii=False)
+
+
+def tool_search_products(query: str = "", limit: int = 8) -> str:
+    items = search_products(query, limit=int(limit or 8))
+    return json.dumps({"ok": True, "query": query, "items": items}, ensure_ascii=False)
+
+
+def tool_compare_products(a: str, b: str = "") -> str:
+    return json.dumps(compare_products(a, b or None), ensure_ascii=False)
 
 
 MCP_TOOL_MAP = {
@@ -120,4 +141,7 @@ MCP_TOOL_MAP = {
         kw["session_id"], kw["score"], kw.get("comment", "")
     ),
     "search_company_policy": lambda **kw: tool_search_company_policy(kw["query"]),
+    "get_product": lambda **kw: tool_get_product(kw["query"]),
+    "search_products": lambda **kw: tool_search_products(kw.get("query", ""), kw.get("limit", 8)),
+    "compare_products": lambda **kw: tool_compare_products(kw["a"], kw.get("b", "")),
 }

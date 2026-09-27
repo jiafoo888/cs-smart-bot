@@ -90,7 +90,7 @@ function setPipeline(agent) {
       node === "supervisor" ||
       node === agent ||
       (agent === "csat" && node === "smalltalk") ||
-      (agent === "verify" && node === "verify");
+      (agent === "product" && node === "product");
     li.classList.toggle("active", on);
   });
   const pill = el("routePill");
@@ -142,7 +142,6 @@ function updateContext(data) {
   setText("ctxPayment", data.payment_id || "—");
   setText("ctxAgent", data.agent || "—");
   setText("ctxBot", data.bot_paused ? "paused (human)" : "active");
-  setText("ctxVerified", data.verified ? "yes" : "no");
   const tier = data.customer_tier || "—";
   setText("ctxTier", tier);
   const tierNode = el("ctxTier");
@@ -190,6 +189,7 @@ async function sendChat(message) {
       loadMetrics(),
       loadProfile(),
       loadAssist(),
+      loadProducts(),
     ]);
   } catch (err) {
     typing?.remove();
@@ -198,6 +198,21 @@ async function sendChat(message) {
     if (sendBtn) sendBtn.disabled = false;
     el("stageScroll")?.classList.remove("busy");
   }
+}
+
+async function loadProducts() {
+  const res = await fetch("/api/products?limit=12");
+  const data = await res.json();
+  setHtml(
+    "products",
+    (data.items || [])
+      .map(
+        (p) => `<div class="row-card"><strong>${p.sku}</strong>
+      <span class="badge ok">${p.category}</span><br/>
+      ${p.name} · ¥${p.price}<br/>${p.best_for || ""}</div>`
+      )
+      .join("") || `<div class="row-card">No catalog</div>`
+  );
 }
 
 async function loadOrders() {
@@ -251,7 +266,7 @@ async function loadProfile() {
   const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/profile`);
   const data = await res.json();
   if (!data.customer_id) {
-    setText("profileHint", "Look up an order, then verify. Or tap Verify · 1001 / ORD-1005 for VIP.");
+    setText("profileHint", "Look up an order to bind account context. VIP shows on ORD-1005.");
     setHtml("profileKv", "");
     return;
   }
@@ -401,6 +416,8 @@ const refreshOrders = el("refreshOrders");
 if (refreshOrders) refreshOrders.onclick = loadOrders;
 const refreshTickets = el("refreshTickets");
 if (refreshTickets) refreshTickets.onclick = loadTickets;
+const refreshProducts = el("refreshProducts");
+if (refreshProducts) refreshProducts.onclick = loadProducts;
 
 const reingest = el("btnReingest");
 if (reingest) {
@@ -454,10 +471,11 @@ Promise.allSettled([
   loadHealth(),
   loadProfile(),
   loadAssist(),
+  loadProducts(),
 ]);
 refreshByokUi();
 addMessage(
   "bot",
-  "SteelShop Care online. Ask about policies, orders, payments, or refunds. Optional: Ops → paste your OpenAI key for live policy answers. VIP: ORD-1005 → verify 1004."
+  "SteelShop Care online. Ask policies, product specs, or “compare earbuds”. Orders and refunds still work — refunds ask for YES. Optional: Ops → paste OpenAI key for live policy wording."
 );
 setPipeline("supervisor");

@@ -17,8 +17,16 @@ def _category_from_name(name: str) -> str:
     n = name.lower()
     if "return" in n or "refund" in n:
         return "return_refund"
-    if "warranty" in n or "product" in n:
+    if "warranty" in n:
         return "warranty"
+    if "catalog" in n or "finder" in n or "product" in n:
+        return "product"
+    if "loyalty" in n or "reward" in n:
+        return "loyalty"
+    if "exchange" in n or "size" in n:
+        return "exchange"
+    if "delivery" in n:
+        return "shipping"
     if "payment" in n or "invoice" in n:
         return "payment"
     if "privacy" in n or "security" in n:
@@ -114,6 +122,14 @@ def load_documents() -> list[Document]:
 
 def ingest_all_policies() -> dict:
     settings = get_settings()
+    # Refresh structured catalog → markdown so RAG stays in sync
+    try:
+        from app.catalog import ensure_catalog_markdown, reload_products
+
+        reload_products()
+        ensure_catalog_markdown()
+    except Exception:
+        pass
     docs = load_documents()
     build_from_documents(docs)
     by_cat: dict[str, int] = {}

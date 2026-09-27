@@ -431,7 +431,7 @@ def build_assist(session_id: str) -> dict:
                 "so I'll complete it as a specialist after a quick check."
             )
         else:
-            draft += "I'll process it now that identity is verified."
+            draft += "I'll process it now after your confirmation."
         recommended = [pending["action"], "resume_bot_after"]
     elif last_user:
         draft = (

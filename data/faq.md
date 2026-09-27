@@ -17,6 +17,19 @@ Free shipping over 99 CNY. Buyer pays return shipping for no-reason returns; sel
 ## Invoices
 Request an e-invoice from the order page; issuance usually completes within 24 hours.
 
+## Product Lookup
+Ask for a product by name or SKU (for example Wireless Earbuds Pro or SKU-EAR-PRO) to see price, specs, warranty, and what is in the box.
+
+## Product Compare
+Say “compare earbuds”, “compare keyboards”, or “compare SKU-EAR-PRO and SKU-EAR-LITE” for a side-by-side spec table.
+
+## Popular SKUs
+- SKU-EAR-PRO / SKU-EAR-LITE — earbuds
+- SKU-KB-MECH / SKU-KB-65 — keyboards
+- SKU-ARM-MON / SKU-ARM-DUAL — monitor arms
+- SKU-HUB-USC / SKU-DOCK-PRO — hubs and docks
+- SKU-CHR-ERG / SKU-CHR-PLUS — chairs
+
 ## Account Help
 Agents cannot share plaintext passwords. Use the password-reset flow.
 

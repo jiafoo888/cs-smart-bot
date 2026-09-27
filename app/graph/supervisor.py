@@ -17,12 +17,13 @@ from app.db.enterprise_ops import (
 )
 from app.db.repository import append_chat_log, create_ticket, lookup_order
 from app.mcp_bridge import call_mcp_tool
-from app.pii import redact_order, redact_payment
 from app.rag.retriever import retrieve_faq, sources_for_ui
+from app.catalog import extract_product_query
 from app.response import (
     compose_address_answer,
     compose_approval_hold,
     compose_cancel_answer,
+    compose_compare_answer,
     compose_confirm_mutation,
     compose_csat_answer,
     compose_denied_mutation,
@@ -39,11 +40,10 @@ from app.response import (
     compose_payments_list,
     compose_pending_reminder,
     compose_policy_answer,
+    compose_product_answer,
+    compose_product_search_answer,
     compose_refund_answer,
     compose_tracking_answer,
-    compose_verify_fail,
-    compose_verify_ok,
-    compose_verify_prompt,
     is_follow_up,
     is_greeting,
     parse_csat_score,
@@ -58,15 +58,12 @@ from app.trust import (
     get_pending,
     is_confirm,
     is_deny,
-    looks_like_verify,
     mutation_requires_approval,
-    parse_verify_token,
     set_pending,
-    verify_session,
 )
 
 AgentName = Literal[
-    "smalltalk", "faq", "order", "payment", "refund", "loyalty", "escalate", "finish"
+    "smalltalk", "faq", "product", "order", "payment", "refund", "loyalty", "escalate", "finish"
 ]
 
 
@@ -115,13 +112,6 @@ def _gate_mutation(state: CSState, action: str, oid: str, payload: dict, agent: 
     sid = state.get("session_id") or "unknown"
     bind_order(sid, oid)
     ident = get_identity(sid)
-    if not ident.get("verified"):
-        return _finish(
-            compose_verify_prompt(oid),
-            agent,
-            order_id=oid,
-            debug={"gate": "verify", "action": action},
-        )
     order = lookup_order(oid)
     if not order:
         return _finish(
@@ -183,12 +173,40 @@ def route_intent(state: CSState) -> dict:
         wants_invoice = False
         asking_policy = True
 
+    wants_product = any(
+        k in t
+        for k in (
+            "compare",
+            "vs",
+            "versus",
+            "spec",
+            "specs",
+            "product",
+            "catalog",
+            "sku-",
+            "earbuds",
+            "keyboard",
+            "monitor arm",
+            "usb-c hub",
+            "dock",
+            "ergonomic chair",
+            "tell me about",
+            "difference between",
+        )
+    ) or bool(extract_product_query(text))
+
     if is_greeting(t):
         nxt: AgentName = "smalltalk"
     elif any(k in t for k in ("human", "agent", "escalate", "complaint", "manager", "lawyer")):
         nxt = "escalate"
+    elif any(k in t for k in ("points", "loyalty", "coupon", "coupons", "rewards")) and any(
+        k in t for k in ("how", "what", "policy", "work", "earn", "redeem", "expire")
+    ) and not oid_in_msg:
+        nxt = "faq"
     elif any(k in t for k in ("points", "loyalty", "coupon", "coupons", "rewards")):
         nxt = "loyalty"
+    elif wants_product and not oid_in_msg and not asking_policy:
+        nxt = "product"
     elif wants_invoice or any(
         k in t
         for k in (
@@ -221,9 +239,11 @@ def route_intent(state: CSState) -> dict:
     ):
         nxt = "order"
     elif asking_policy or any(
-        k in t for k in ("policy", "return", "refund", "shipping", "warranty")
+        k in t for k in ("policy", "return", "refund", "shipping", "warranty", "loyalty policy")
     ):
         nxt = "faq"
+    elif wants_product:
+        nxt = "product"
     else:
         nxt = "smalltalk"
 
@@ -287,6 +307,71 @@ async def faq_agent(state: CSState) -> dict:
             ],
         },
     }
+
+
+
+async def product_agent(state: CSState) -> dict:
+    text = _last_user_text(state)
+    t = text.lower()
+
+    if "compare" in t or " vs " in t or "versus" in t or "difference between" in t:
+        # parse "compare A and B" / "A vs B"
+        import re as _re
+
+        m = _re.search(
+            r"compare\s+(.+?)\s+(?:and|vs|versus|with)\s+(.+)$",
+            text,
+            flags=_re.I,
+        )
+        if m:
+            a, b = m.group(1).strip(" ."), m.group(2).strip(" .")
+        else:
+            m2 = _re.search(r"(.+?)\s+vs\.?\s+(.+)$", text, flags=_re.I)
+            if m2:
+                a, b = m2.group(1).strip(" ."), m2.group(2).strip(" .")
+            else:
+                # category compare e.g. "compare earbuds"
+                a = extract_product_query(text) or _re.sub(
+                    r"^(compare|difference between)\s+", "", text, flags=_re.I
+                ).strip()
+                b = ""
+        raw = await call_mcp_tool("compare_products", {"a": a, "b": b})
+        result = json.loads(raw)
+        return _finish(
+            compose_compare_answer(result),
+            "product",
+            debug={"mcp_tool": "compare_products", "result": result},
+        )
+
+    query = extract_product_query(text)
+    if query and any(k in t for k in ("spec", "about", "detail", "info", "tell me", "what is")):
+        raw = await call_mcp_tool("get_product", {"query": query})
+        result = json.loads(raw)
+        return _finish(
+            compose_product_answer(result),
+            "product",
+            debug={"mcp_tool": "get_product", "result": result},
+        )
+
+    # bare product name → full sheet; otherwise search
+    if query:
+        raw = await call_mcp_tool("get_product", {"query": query})
+        result = json.loads(raw)
+        if result.get("ok"):
+            return _finish(
+                compose_product_answer(result),
+                "product",
+                debug={"mcp_tool": "get_product", "result": result},
+            )
+
+    search_q = query or text
+    raw = await call_mcp_tool("search_products", {"query": search_q, "limit": 6})
+    result = json.loads(raw)
+    return _finish(
+        compose_product_search_answer(result),
+        "product",
+        debug={"mcp_tool": "search_products", "result": result},
+    )
 
 
 async def order_agent(state: CSState) -> dict:
@@ -455,10 +540,8 @@ async def order_agent(state: CSState) -> dict:
     if not pays:
         pay_raw = await call_mcp_tool("get_order_payments", {"order_id": oid})
         pays = json.loads(pay_raw).get("payments") or []
-    pays = [redact_payment(p, verified=bool(ident.get("verified"))) or p for p in pays]
-    data = redact_order(data, verified=bool(ident.get("verified"))) or data
 
-    msg = compose_order_answer(data, pays, verified=bool(ident.get("verified")))
+    msg = compose_order_answer(data, pays, verified=True)
     return {
         "messages": [AIMessage(content=msg)],
         "last_agent": "order",
@@ -468,7 +551,6 @@ async def order_agent(state: CSState) -> dict:
         "debug": {
             "mcp_tool": "get_order_status",
             "order": data,
-            "verified": ident.get("verified"),
             "tier": ident.get("tier"),
         },
     }
@@ -483,11 +565,9 @@ async def payment_agent(state: CSState) -> dict:
     if pid:
         raw = await call_mcp_tool("get_payment_status", {"payment_id": pid})
         data = json.loads(raw)
-        ident = get_identity(state.get("session_id") or "")
         if data.get("error"):
             msg = f"I couldn't find payment {pid}."
         else:
-            data = redact_payment(data, verified=bool(ident.get("verified"))) or data
             msg = compose_payment_answer(data)
             oid = data.get("order_id") or oid
             if oid:
@@ -545,13 +625,6 @@ async def loyalty_agent(state: CSState) -> dict:
     if oid:
         bind_order(sid, oid)
         ident = get_identity(sid)
-    if not ident.get("verified"):
-        return _finish(
-            compose_verify_prompt(oid or ident.get("order_id")),
-            "loyalty",
-            order_id=oid,
-            debug={"gate": "verify", "action": "loyalty"},
-        )
     raw = await call_mcp_tool(
         "get_loyalty",
         {"customer_id": ident.get("customer_id") or "", "order_id": oid or ident.get("order_id") or ""},
@@ -602,6 +675,7 @@ def build_graph(checkpointer: MemorySaver | None = None):
     g.add_node("supervisor", supervisor)
     g.add_node("smalltalk", smalltalk_agent)
     g.add_node("faq", faq_agent)
+    g.add_node("product", product_agent)
     g.add_node("order", order_agent)
     g.add_node("payment", payment_agent)
     g.add_node("refund", refund_agent)
@@ -615,6 +689,7 @@ def build_graph(checkpointer: MemorySaver | None = None):
         {
             "smalltalk": "smalltalk",
             "faq": "faq",
+            "product": "product",
             "order": "order",
             "payment": "payment",
             "refund": "refund",
@@ -622,7 +697,7 @@ def build_graph(checkpointer: MemorySaver | None = None):
             "escalate": "escalate",
         },
     )
-    for node in ("smalltalk", "faq", "order", "payment", "refund", "loyalty", "escalate"):
+    for node in ("smalltalk", "faq", "product", "order", "payment", "refund", "loyalty", "escalate"):
         g.add_edge(node, END)
 
     memory = checkpointer or MemorySaver()
@@ -674,7 +749,7 @@ async def _chat_inner(session_id: str, message: str) -> dict:
             "payment_id": payment_id,
             "sources": sources or [],
             "bot_paused": paused,
-            "verified": bool(ident_now.get("verified")),
+            "verified": True,
             "customer_tier": ident_now.get("tier"),
             "pending_action": (pend or {}).get("action"),
             "llm_mode": llm_mode(),
@@ -685,18 +760,6 @@ async def _chat_inner(session_id: str, message: str) -> dict:
     if score is not None:
         result = save_satisfaction(session_id, score)
         return _pack(compose_csat_answer(result), "csat", debug={"csat": result})
-
-    if looks_like_verify(message) and not is_confirm(message):
-        token = parse_verify_token(message)
-        if not token:
-            return _pack(compose_verify_prompt(ident.get("order_id")), "verify")
-        result = verify_session(session_id, token)
-        if not result.get("ok"):
-            return _pack(compose_verify_fail(result.get("error") or "mismatch"), "verify", debug=result)
-        reply = compose_verify_ok(result)
-        if pending:
-            reply += " " + compose_pending_reminder(pending)
-        return _pack(reply, "verify", debug={"identity": {k: v for k, v in result.items() if k != "ok"}})
 
     if is_bot_paused(session_id):
         return _pack(compose_handoff_waiting(), "handoff", bot_paused=True, debug={"bot_paused": True})
@@ -739,8 +802,7 @@ async def _chat_inner(session_id: str, message: str) -> dict:
         if is_deny(message):
             clear_pending(session_id)
             return _pack(compose_denied_mutation(), "order", order_id=pending.get("order_id"))
-        if not looks_like_verify(message):
-            return _pack(compose_pending_reminder(pending), "order", order_id=pending.get("order_id"))
+        return _pack(compose_pending_reminder(pending), "order", order_id=pending.get("order_id"))
 
     graph = get_graph()
     config = {"configurable": {"thread_id": session_id}}

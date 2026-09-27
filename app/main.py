@@ -234,17 +234,42 @@ async def api_metrics():
             "supervisor",
             "smalltalk",
             "faq",
+            "product",
             "order",
             "payment",
             "refund",
             "loyalty",
             "escalate",
-            "verify",
             "csat",
             "handoff",
         ],
         "auto_refund_limit": 300,
     }
+
+
+@app.get("/api/products")
+async def api_products(q: str = "", limit: int = Query(20, le=50)):
+    from app.catalog import load_products, search_products
+
+    items = search_products(q, limit=limit) if q.strip() else load_products()[:limit]
+    return {"items": items, "count": len(items)}
+
+
+@app.get("/api/products/compare")
+async def api_compare(a: str = Query(...), b: str = ""):
+    from app.catalog import compare_products
+
+    return compare_products(a, b or None)
+
+
+@app.get("/api/products/{sku}")
+async def api_product(sku: str):
+    from app.catalog import get_product
+
+    product = get_product(sku)
+    if not product:
+        raise HTTPException(404, f"Product {sku} not found")
+    return product
 
 
 @app.get("/api/orders/{order_id}/tracking")

@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260327-byok" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260327-catalog" />
 </head>
 <body>
   <header class="topbar">
@@ -48,11 +48,11 @@
           <li data-node="supervisor">Router</li>
           <li data-node="smalltalk">Greeting</li>
           <li data-node="faq">Policy</li>
+          <li data-node="product">Products</li>
           <li data-node="order">Orders</li>
           <li data-node="payment">Payments</li>
           <li data-node="refund">Refunds</li>
           <li data-node="loyalty">Loyalty</li>
-          <li data-node="verify">Verify</li>
           <li data-node="escalate">Human</li>
           <li data-node="handoff">Paused</li>
         </ol>
@@ -62,14 +62,15 @@
         <h2>Try</h2>
         <div class="chips" id="quickIntents">
           <button type="button" data-q="What is the return policy window?">Return policy</button>
+          <button type="button" data-q="How do loyalty points work?">Loyalty policy</button>
+          <button type="button" data-q="Tell me about Wireless Earbuds Pro">Earbuds Pro specs</button>
+          <button type="button" data-q="Compare earbuds">Compare earbuds</button>
+          <button type="button" data-q="Compare Mechanical Keyboard and Compact Keyboard 65%">Compare keyboards</button>
+          <button type="button" data-q="Search products for desk setup">Search desk products</button>
           <button type="button" data-q="Check order ORD-1001">Order ORD-1001</button>
-          <button type="button" data-q="verify 1001">Verify · 1001</button>
           <button type="button" data-q="Show tracking timeline for ORD-1001">Tracking</button>
           <button type="button" data-q="Please refund ORD-1002">Refund ORD-1002</button>
           <button type="button" data-q="Cancel order ORD-1003">Cancel ORD-1003</button>
-          <button type="button" data-q="Check order ORD-1005">VIP order ORD-1005</button>
-          <button type="button" data-q="verify 1004">Verify VIP · 1004</button>
-          <button type="button" data-q="Please refund ORD-1005">Refund ORD-1005</button>
           <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate</button>
         </div>
       </section>
@@ -79,7 +80,7 @@
       <div class="stage-head">
         <div>
           <h1>Thread</h1>
-          <p class="muted" id="threadHint">Same inbox for all customers — VIP appears after verifying ORD-1005</p>
+          <p class="muted" id="threadHint">Ask policies, product specs, or compare catalog items</p>
         </div>
         <div class="route-pill" id="routePill">router</div>
       </div>
@@ -114,14 +115,13 @@
             <div><dt>Payment</dt><dd id="ctxPayment">—</dd></div>
             <div><dt>Route</dt><dd id="ctxAgent">—</dd></div>
             <div><dt>Bot</dt><dd id="ctxBot">active</dd></div>
-            <div><dt>Verified</dt><dd id="ctxVerified">no</dd></div>
             <div><dt>Tier</dt><dd id="ctxTier">—</dd></div>
             <div><dt>Pending</dt><dd id="ctxPending">—</dd></div>
           </dl>
         </article>
         <article class="panel-block">
           <h3>Account</h3>
-          <p class="muted small" id="profileHint">Look up an order, then verify. ORD-1005 is VIP.</p>
+          <p class="muted small" id="profileHint">Look up an order to bind account context. VIP shows on ORD-1005.</p>
           <dl class="kv" id="profileKv"></dl>
         </article>
         <article class="panel-block" id="handoffPanel">
@@ -144,6 +144,13 @@
             <button type="button" data-score="4">4</button>
             <button type="button" data-score="5">5</button>
           </div>
+        </article>
+        <article class="panel-block">
+          <div class="row-head">
+            <h3>Catalog</h3>
+            <button type="button" class="ghost" id="refreshProducts">Refresh</button>
+          </div>
+          <div id="products" class="feed"></div>
         </article>
         <article class="panel-block">
           <div class="row-head">
@@ -211,6 +218,6 @@
     </aside>
   </main>
 
-  <script src="/static/app.js?v=20260327-byok"></script>
+  <script src="/static/app.js?v=20260327-catalog"></script>
 </body>
 </html>

@@ -10,10 +10,12 @@ from mcp.server.fastmcp import FastMCP
 
 from app.mcp_tools import (
     tool_cancel_order,
+    tool_compare_products,
     tool_get_loyalty,
     tool_get_order_payments,
     tool_get_order_status,
     tool_get_payment_status,
+    tool_get_product,
     tool_get_tracking_events,
     tool_nudge_fulfillment,
     tool_request_exchange,
@@ -21,6 +23,7 @@ from app.mcp_tools import (
     tool_request_refund,
     tool_save_satisfaction,
     tool_search_company_policy,
+    tool_search_products,
     tool_update_shipping_address,
 )
 
@@ -103,6 +106,24 @@ def save_satisfaction(session_id: str, score: int, comment: str = "") -> str:
 def search_company_policy(query: str) -> str:
     """RAG search over policy knowledge base."""
     return tool_search_company_policy(query)
+
+
+@mcp.tool()
+def get_product(query: str) -> str:
+    """Get full product sheet by name or SKU."""
+    return tool_get_product(query)
+
+
+@mcp.tool()
+def search_products(query: str = "", limit: int = 8) -> str:
+    """Search the SteelShop product catalog."""
+    return tool_search_products(query, limit)
+
+
+@mcp.tool()
+def compare_products(a: str, b: str = "") -> str:
+    """Compare two products or peers in a category (e.g. earbuds)."""
+    return tool_compare_products(a, b)
 
 
 def main() -> None:
