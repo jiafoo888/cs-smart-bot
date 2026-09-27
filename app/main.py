@@ -78,6 +78,10 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Stable session id for multi-turn memory")
     message: str = Field(..., min_length=1)
     include_debug: bool = Field(False, description="Include router/RAG/MCP debug payload")
+    openai_api_key: str | None = Field(
+        default=None,
+        description="Optional BYOK OpenAI key for this request only — not stored",
+    )
 
 
 class SourceChip(BaseModel):
@@ -97,6 +101,7 @@ class ChatResponse(BaseModel):
     verified: bool = False
     customer_tier: str | None = None
     pending_action: str | None = None
+    llm_mode: str = "mock"
     debug: dict | None = None
 
 
@@ -115,8 +120,10 @@ async def health():
     return {
         "status": "ok",
         "service": "SteelShop Care",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "mock_llm": s.use_mock_llm or not s.openai_api_key,
+        "byok": True,
+        "openai_model": s.openai_model,
         "embedding_backend": s.embedding_backend,
         "rag": {
             "library": s.vector_store,
@@ -132,7 +139,12 @@ async def health():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(body: ChatRequest):
-    result = await chat(body.session_id, body.message)
+    # Key is request-scoped only; never persisted by chat() / chat_logs
+    result = await chat(
+        body.session_id,
+        body.message,
+        openai_api_key=body.openai_api_key,
+    )
     if not body.include_debug:
         result = {**result, "debug": None}
     return ChatResponse(**result)

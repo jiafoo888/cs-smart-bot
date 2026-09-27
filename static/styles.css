@@ -571,6 +571,23 @@ body {
   font-size: 12px;
   cursor: pointer;
 }
+.byok-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  font: 12px var(--mono);
+  outline: none;
+  background: #fff;
+  color: var(--ink);
+}
+.byok-input:focus {
+  border-color: var(--accent-mid);
+  box-shadow: 0 0 0 3px rgba(47, 95, 158, 0.12);
+}
+.live-pill.byok { color: #9eb8e0; }
+.live-pill.byok i { background: #6ea0e0; box-shadow: none; animation: none; }
+
 .ops-pre {
   margin: 0;
   white-space: pre-wrap;

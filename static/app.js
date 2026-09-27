@@ -15,6 +15,58 @@ function setHtml(id, value) {
 }
 
 const sessionId = "care-demo-1";
+const BYOK_STORAGE = "steelshop_byok_openai_key";
+
+function getByokKey() {
+  try {
+    return (sessionStorage.getItem(BYOK_STORAGE) || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function setByokKey(key) {
+  const cleaned = (key || "").trim();
+  try {
+    if (cleaned) sessionStorage.setItem(BYOK_STORAGE, cleaned);
+    else sessionStorage.removeItem(BYOK_STORAGE);
+  } catch {
+    /* ignore private-mode quota */
+  }
+  refreshByokUi();
+}
+
+function maskKey(key) {
+  if (!key) return "";
+  if (key.length < 10) return "••••";
+  return key.slice(0, 5) + "…" + key.slice(-4);
+}
+
+function refreshByokUi(llmMode) {
+  const key = getByokKey();
+  const input = el("byokKey");
+  const hint = el("byokHint");
+  const pill = el("llmPill");
+  const mode = llmMode || (key ? "byok" : "mock");
+  if (input && document.activeElement !== input) {
+    input.value = key;
+    input.placeholder = key ? maskKey(key) : "sk-…";
+  }
+  if (hint) {
+    hint.textContent = key
+      ? `BYOK active (${maskKey(key)}). Policy answers use your OpenAI key; orders/tools stay local.`
+      : "Offline mock replies (no key). Paste a key to use gpt-4o-mini for policy answers.";
+  }
+  if (pill) {
+    pill.classList.toggle("byok", mode === "byok" || mode === "server");
+    pill.innerHTML =
+      mode === "byok"
+        ? "<i></i> LLM · your key"
+        : mode === "server"
+          ? "<i></i> LLM · server"
+          : "<i></i> LLM · mock";
+  }
+}
 
 function badgeClass(status) {
   const s = (status || "").toLowerCase();
@@ -108,10 +160,17 @@ async function sendChat(message) {
   if (sendBtn) sendBtn.disabled = true;
   el("stageScroll")?.classList.add("busy");
   try {
+    const payload = {
+      session_id: sessionId,
+      message,
+      include_debug,
+    };
+    const byok = getByokKey();
+    if (byok) payload.openai_api_key = byok;
     const res = await fetch("/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: sessionId, message, include_debug }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
@@ -122,6 +181,7 @@ async function sendChat(message) {
     });
     updateContext(data);
     setPipeline(data.agent);
+    refreshByokUi(data.llm_mode);
     if (include_debug) setText("opsDebug", JSON.stringify(data.debug || {}, null, 2));
     // Refresh side panels without failing the chat if one panel is missing
     await Promise.allSettled([
@@ -363,6 +423,29 @@ if (reseed) {
   };
 }
 
+const saveByok = el("btnSaveByok");
+if (saveByok) {
+  saveByok.onclick = () => {
+    const raw = el("byokKey")?.value || "";
+    setByokKey(raw);
+    addMessage(
+      "bot",
+      raw.trim()
+        ? "API key saved for this browser tab. Ask a policy question (e.g. return window) to use the live model."
+        : "API key cleared. Back to offline mock replies."
+    );
+  };
+}
+const clearByok = el("btnClearByok");
+if (clearByok) {
+  clearByok.onclick = () => {
+    const input = el("byokKey");
+    if (input) input.value = "";
+    setByokKey("");
+    addMessage("bot", "API key cleared. Back to offline mock replies.");
+  };
+}
+
 Promise.allSettled([
   loadOrders(),
   loadTickets(),
@@ -372,8 +455,9 @@ Promise.allSettled([
   loadProfile(),
   loadAssist(),
 ]);
+refreshByokUi();
 addMessage(
   "bot",
-  "SteelShop Care online. Ask about policies, orders, payments, or refunds. VIP: ORD-1005 → verify 1004."
+  "SteelShop Care online. Ask about policies, orders, payments, or refunds. Optional: Ops → paste your OpenAI key for live policy answers. VIP: ORD-1005 → verify 1004."
 );
 setPipeline("supervisor");

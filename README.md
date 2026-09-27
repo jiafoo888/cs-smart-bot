@@ -77,8 +77,9 @@ python test.py
 ## Demo scripts
 
 - `What is the return policy window?` → grounded policy answer + source chips  
+- **Ops → Your OpenAI key** → paste key → policy answers use live model (BYOK; not stored)  
 - `Check order ORD-1001` → order facts, address hidden until verify  
-- `verify 1001` → unlocks PII (demo last-4 = order suffix for 1001–1004)  
+- `verify 1001` → unlocks PII (demo last-4 = phone suffix)  
 - `Please refund ORD-1002` → verify + YES; ¥459 is over auto-limit → SLA ticket  
 - `hello` / off-topic → greeting, not stuck on prior order  
 

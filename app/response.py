@@ -9,7 +9,7 @@ import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.llm import USE_MOCK, get_chat_model
+from app.llm import get_chat_model, llm_mode, should_use_live_llm
 
 
 GROUNDING_SYSTEM = """You are SteelShop customer support.
@@ -38,17 +38,23 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
         f"- {_clean_policy_text(h.get('text', ''))}" for h in hits[:3] if h.get("text")
     )
 
-    if not USE_MOCK:
-        model = get_chat_model()
-        msg = model.invoke(
-            [
-                SystemMessage(content=GROUNDING_SYSTEM),
-                HumanMessage(
-                    content=f"POLICY CONTEXT:\n{context}\n\nCUSTOMER QUESTION:\n{question}"
-                ),
-            ]
-        )
-        return str(msg.content).strip()
+    if should_use_live_llm():
+        try:
+            model = get_chat_model()
+            msg = model.invoke(
+                [
+                    SystemMessage(content=GROUNDING_SYSTEM),
+                    HumanMessage(
+                        content=f"POLICY CONTEXT:\n{context}\n\nCUSTOMER QUESTION:\n{question}"
+                    ),
+                ]
+            )
+            return str(msg.content).strip()
+        except Exception as exc:  # noqa: BLE001 — surface key/network errors to the user
+            return (
+                "I couldn't reach the language model "
+                f"({type(exc).__name__}). Check the API key in Ops, or clear it to use offline replies."
+            )
 
     # Offline mock: turn top substantial chunk into a short spoken answer
     body = ""
@@ -74,7 +80,11 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
         body = " ".join(_clean_policy_text(hits[0].get("text", "")).split())
     if len(body) > 320:
         body = body[:317].rsplit(" ", 1)[0] + "..."
-    return f"{body}\n\nAnything else I can help with — an order, payment, or return?"
+    mode = llm_mode()
+    suffix = "\n\nAnything else I can help with — an order, payment, or return?"
+    if mode == "mock":
+        return f"{body}{suffix}"
+    return f"{body}{suffix}"
 
 
 def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified: bool = False) -> str:

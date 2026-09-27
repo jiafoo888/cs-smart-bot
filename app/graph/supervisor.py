@@ -49,6 +49,7 @@ from app.response import (
     parse_csat_score,
 )
 from app.tools.order_tools import extract_new_address, extract_order_id, extract_payment_id
+from app.llm import llm_mode, reset_request_api_key, set_request_api_key
 from app.trust import (
     bind_order,
     clear_pending,
@@ -274,6 +275,7 @@ async def faq_agent(state: CSState) -> dict:
         "debug": {
             "rag_via": "chroma+grounded_generate",
             "pipeline": ["retrieve", "ground", "respond"],
+            "llm_mode": llm_mode(),
             "hits": [
                 {
                     "source": h.get("source"),
@@ -644,7 +646,15 @@ def reset_graph() -> None:
     _app = build_graph(_memory)
 
 
-async def chat(session_id: str, message: str) -> dict:
+async def chat(session_id: str, message: str, openai_api_key: str | None = None) -> dict:
+    key_token = set_request_api_key(openai_api_key)
+    try:
+        return await _chat_inner(session_id, message)
+    finally:
+        reset_request_api_key(key_token)
+
+
+async def _chat_inner(session_id: str, message: str) -> dict:
     append_chat_log(session_id, "user", message)
     ident = get_identity(session_id)
     pending = get_pending(session_id)
@@ -653,7 +663,9 @@ async def chat(session_id: str, message: str) -> dict:
         ident_now = get_identity(session_id)
         pend = get_pending(session_id)
         paused = is_bot_paused(session_id) if bot_paused is None else bot_paused
-        append_chat_log(session_id, "assistant", reply, agent=agent, meta=debug)
+        # Never put API keys into meta / chat_logs
+        safe_meta = {**(debug or {}), "llm_mode": llm_mode()}
+        append_chat_log(session_id, "assistant", reply, agent=agent, meta=safe_meta)
         return {
             "session_id": session_id,
             "reply": reply,
@@ -665,7 +677,8 @@ async def chat(session_id: str, message: str) -> dict:
             "verified": bool(ident_now.get("verified")),
             "customer_tier": ident_now.get("tier"),
             "pending_action": (pend or {}).get("action"),
-            "debug": debug or {},
+            "llm_mode": llm_mode(),
+            "debug": safe_meta,
         }
 
     score = parse_csat_score(message)
@@ -683,7 +696,7 @@ async def chat(session_id: str, message: str) -> dict:
         reply = compose_verify_ok(result)
         if pending:
             reply += " " + compose_pending_reminder(pending)
-        return _pack(reply, "verify", debug={"identity": result})
+        return _pack(reply, "verify", debug={"identity": {k: v for k, v in result.items() if k != "ok"}})
 
     if is_bot_paused(session_id):
         return _pack(compose_handoff_waiting(), "handoff", bot_paused=True, debug={"bot_paused": True})
@@ -742,7 +755,7 @@ async def chat(session_id: str, message: str) -> dict:
     reply = str(last.content)
     agent = result.get("last_agent") or result.get("next_agent")
     debug = result.get("debug") or {}
-    packed = _pack(
+    return _pack(
         reply,
         agent,
         order_id=result.get("order_id"),
@@ -750,5 +763,3 @@ async def chat(session_id: str, message: str) -> dict:
         sources=result.get("sources") or [],
         debug=debug,
     )
-    packed["debug"] = debug
-    return packed

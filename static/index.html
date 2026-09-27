@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260326" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260327-byok" />
 </head>
 <body>
   <header class="topbar">
@@ -24,7 +24,7 @@
       <div class="metric"><span class="m-label">Tickets</span><strong id="mTickets">—</strong></div>
     </div>
     <div class="top-actions">
-      <span class="live-pill"><i></i> Online</span>
+      <span class="live-pill" id="llmPill"><i></i> LLM · mock</span>
       <label class="switch">
         <input type="checkbox" id="debugToggle" />
         <span>Debug</span>
@@ -163,6 +163,25 @@
 
       <div class="tab-panel" id="panel-ops">
         <article class="panel-block">
+          <h3>Your OpenAI key (BYOK)</h3>
+          <p class="muted small">
+            Optional. Stored only in this browser tab (sessionStorage). Sent with each chat request for policy answers — never written to the database.
+          </p>
+          <input
+            id="byokKey"
+            class="byok-input"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="sk-…"
+          />
+          <div class="handoff-actions" style="margin-top:8px">
+            <button type="button" class="ghost" id="btnSaveByok">Use key</button>
+            <button type="button" class="ghost" id="btnClearByok">Clear</button>
+          </div>
+          <p class="muted small" id="byokHint">Offline mock replies (no key).</p>
+        </article>
+        <article class="panel-block">
           <h3>Knowledge base</h3>
           <p class="muted small" id="kbSummary">Loading…</p>
           <div class="kb-knobs" id="kbKnobs"></div>
@@ -192,6 +211,6 @@
     </aside>
   </main>
 
-  <script src="/static/app.js?v=20260326"></script>
+  <script src="/static/app.js?v=20260327-byok"></script>
 </body>
 </html>
