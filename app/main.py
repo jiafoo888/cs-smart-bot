@@ -125,6 +125,7 @@ async def health():
         "byok": True,
         "openai_model": s.openai_model,
         "embedding_backend": s.embedding_backend,
+        "catalog": __import__("app.catalog", fromlist=["catalog_status"]).catalog_status(),
         "rag": {
             "library": s.vector_store,
             "chunk_size": s.rag_chunk_size,

@@ -17,7 +17,20 @@ CATALOG_PATH = ROOT / "data" / "catalog" / "products.json"
 def load_products() -> list[dict]:
     if not CATALOG_PATH.exists():
         return []
-    return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def catalog_status() -> dict:
+    products = load_products()
+    return {
+        "path": str(CATALOG_PATH),
+        "exists": CATALOG_PATH.exists(),
+        "count": len(products),
+    }
 
 
 def reload_products() -> list[dict]:
@@ -81,6 +94,11 @@ def products_in_group(group: str) -> list[dict]:
 
 def compare_products(a: str, b: str | None = None) -> dict:
     """Compare two products, or all items in a compare_group if only one hint given."""
+    if not load_products():
+        return {
+            "ok": False,
+            "error": "Product catalog is empty on this server. Ops → Re-ingest after deploy includes data/catalog.",
+        }
     left = get_product(a)
     right = get_product(b) if b else None
     if left and right:

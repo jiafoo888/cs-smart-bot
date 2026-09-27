@@ -15,7 +15,9 @@ from app.llm import get_chat_model, llm_mode, should_use_live_llm
 GROUNDING_SYSTEM = """You are SteelShop customer support.
 Answer ONLY using the POLICY CONTEXT below. Be concise, friendly, and natural.
 Do NOT mention retrieval scores, chunk ids, vector stores, agents, MCP, or RAG.
-Do NOT invent order/payment facts. If context is insufficient, say so briefly.
+Do NOT invent order/payment/product facts that are not in the context.
+If the context does not contain the answer, say you don't have that in the help docs and suggest a related topic.
+Do NOT add marketing fluff or unrelated offers.
 Keep the reply under 120 words."""
 
 
@@ -355,6 +357,8 @@ def compose_compare_answer(result: dict) -> str:
 
 
 def compose_product_search_answer(result: dict) -> str:
+    if result.get("error") and not result.get("items"):
+        return result["error"]
     items = result.get("items") or []
     if not items:
         return "No catalog matches. Try earbuds, keyboard, monitor arm, hub, or chair."

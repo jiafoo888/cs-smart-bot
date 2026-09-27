@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements-prod.txt
 COPY app ./app
 COPY data/policies ./data/policies
 COPY data/faq.md ./data/faq.md
+COPY data/catalog ./data/catalog
 COPY static ./static
 COPY README.md ./
 

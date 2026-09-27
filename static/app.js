@@ -54,8 +54,8 @@ function refreshByokUi(llmMode) {
   }
   if (hint) {
     hint.textContent = key
-      ? `BYOK active (${maskKey(key)}). Policy answers use your OpenAI key; orders/tools stay local.`
-      : "Offline mock replies (no key). Paste a key to use gpt-4o-mini for policy answers.";
+      ? `BYOK active (${maskKey(key)}). Only policy answers use your key (grounded on docs). Products/orders stay local tools.`
+      : "Offline mock replies (no key). Paste a key to use the live model for policy answers only.";
   }
   if (pill) {
     pill.classList.toggle("byok", mode === "byok" || mode === "server");

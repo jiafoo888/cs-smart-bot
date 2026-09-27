@@ -105,7 +105,20 @@ def tool_get_product(query: str) -> str:
 
 
 def tool_search_products(query: str = "", limit: int = 8) -> str:
+    from app.catalog import catalog_status
+
     items = search_products(query, limit=int(limit or 8))
+    status = catalog_status()
+    if not status["count"]:
+        return json.dumps(
+            {
+                "ok": False,
+                "query": query,
+                "items": [],
+                "error": "Product catalog file missing in this deploy (data/catalog/products.json).",
+            },
+            ensure_ascii=False,
+        )
     return json.dumps({"ok": True, "query": query, "items": items}, ensure_ascii=False)
 
 
