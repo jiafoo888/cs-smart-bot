@@ -201,26 +201,27 @@ async function sendChat(message) {
 }
 
 async function loadProducts() {
-  const res = await fetch("/api/products?limit=12");
+  const res = await fetch("/api/inventory?limit=20");
   const data = await res.json();
   setHtml(
     "products",
     (data.items || [])
       .map(
         (p) => `<div class="row-card"><strong>${p.sku}</strong>
-      <span class="badge ok">${p.category}</span><br/>
-      ${p.name} · ¥${p.price}<br/>${p.best_for || ""}</div>`
+      <span class="badge ok">${p.zone}/${p.bin}</span><br/>
+      ${p.name} · ${p.qty_on_hand} ${p.uom || "EA"}</div>`
       )
-      .join("") || `<div class="row-card">No catalog</div>`
+      .join("") || `<div class="row-card">No inventory</div>`
   );
 }
 
 async function loadOrders() {
-  const res = await fetch("/api/orders");
+  const res = await fetch("/api/shipments");
   const data = await res.json();
   setHtml(
     "orders",
     (data.items || [])
+      .filter((o) => String(o.order_id || "").startsWith("SHP-"))
       .map((o) => {
         const vip =
           (o.customer_tier || "").toLowerCase() === "vip"
@@ -228,9 +229,27 @@ async function loadOrders() {
             : "";
         return `<div class="row-card"><strong>${o.order_id}</strong>
       <span class="badge ${badgeClass(o.status)}">${o.status}</span>${vip}<br/>
-      ${o.product} · ¥${o.amount}<br/>${o.customer_name || o.customer_id}</div>`;
+      ${o.product} · SGD ${o.amount}<br/>${o.carrier || "—"} · ${o.customer_name || o.customer_id}</div>`;
       })
       .join("")
+  );
+}
+
+async function loadUploads() {
+  const box = el("uploadList");
+  if (!box) return;
+  const res = await fetch("/api/uploads");
+  const data = await res.json();
+  setHtml(
+    "uploadList",
+    (data.items || []).length
+      ? data.items
+          .map(
+            (u) => `<div class="row-card"><strong>${u.filename}</strong>
+      <span class="badge ok">${u.status}</span><br/>${u.bytes} bytes · ${u.chunk_count || 0} chunks</div>`
+          )
+          .join("")
+      : `<div class="row-card muted">No uploads yet</div>`
   );
 }
 
@@ -255,8 +274,8 @@ async function loadTickets() {
 async function loadMetrics() {
   const res = await fetch("/api/metrics/overview");
   const data = await res.json();
-  setText("mOrders", data.orders_total ?? "—");
-  setText("mPay", data.payments_succeeded ?? "—");
+  setText("mOrders", data.shipments_total ?? data.orders_total ?? "—");
+  setText("mPay", data.inventory_skus ?? data.payments_succeeded ?? "—");
   const open = data.tickets_open ?? "—";
   const breach = data.tickets_sla_breached ?? 0;
   setText("mTickets", breach ? `${open} (${breach} SLA)` : open);
@@ -266,12 +285,12 @@ async function loadProfile() {
   const res = await fetch(`/api/sessions/${encodeURIComponent(sessionId)}/profile`);
   const data = await res.json();
   if (!data.customer_id) {
-    setText("profileHint", "Look up an order to bind account context. VIP shows on ORD-1005.");
+    setText("profileHint", "Look up a shipment to bind shipper context. VIP on SHP-2005.");
     setHtml("profileKv", "");
     return;
   }
   const tier = data.tier || "standard";
-  setText("profileHint", `${data.name} · ${tier} · LTV ¥${data.lifetime_value}`);
+  setText("profileHint", `${data.name} · ${tier} · LTV SGD ${data.lifetime_value}`);
   setHtml(
     "profileKv",
     `
@@ -289,7 +308,7 @@ async function loadAssist() {
   const data = await res.json();
   window.__assistDraft = data.suggested_reply || "";
   const pending = data.pending
-    ? `Pending ${data.pending.action} ${data.pending.order_id} (¥${data.pending.amount})`
+    ? `Pending ${data.pending.action} ${data.pending.order_id} (SGD ${data.pending.amount})`
     : "No pending mutation";
   setText("assistBox", `${pending}\n\n${data.suggested_reply || ""}`);
 }
@@ -419,6 +438,32 @@ if (refreshTickets) refreshTickets.onclick = loadTickets;
 const refreshProducts = el("refreshProducts");
 if (refreshProducts) refreshProducts.onclick = loadProducts;
 
+const btnUpload = el("btnUpload");
+if (btnUpload) {
+  btnUpload.onclick = async () => {
+    const input = el("uploadFile");
+    const file = input?.files?.[0];
+    if (!file) {
+      alert("Choose a PDF, MD, or TXT file first.");
+      return;
+    }
+    btnUpload.textContent = "Uploading…";
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const res = await fetch("/api/uploads", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || res.statusText);
+      await Promise.allSettled([loadUploads(), loadKb(), loadMetrics()]);
+      addMessage("bot", `Uploaded ${data.filename} · ${data.chunk_count || 0} chunks ingested. Ask a question from that SOP.`);
+    } catch (err) {
+      alert("Upload failed: " + err.message);
+    } finally {
+      btnUpload.textContent = "Upload & ingest";
+    }
+  };
+}
+
 const reingest = el("btnReingest");
 if (reingest) {
   reingest.onclick = async () => {
@@ -472,10 +517,11 @@ Promise.allSettled([
   loadProfile(),
   loadAssist(),
   loadProducts(),
+  loadUploads(),
 ]);
 refreshByokUi();
 addMessage(
   "bot",
-  "SteelShop Care online. Ask policies, product specs, or “compare earbuds”. Orders and refunds still work — refunds ask for YES. Optional: Ops → paste OpenAI key for live policy wording."
+  "SteelHub Logistics Care (Singapore) online. Try inbound SLA, track SHP-2001, or “where is my parcel?” (clarify). Ops → upload PDF/MD/TXT SOPs. Optional BYOK for live policy wording."
 );
 setPipeline("supervisor");

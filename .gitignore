@@ -9,3 +9,5 @@ data/vector_store/
 *.egg-info/
 dist/
 build/
+data/uploads/*
+!.gitkeep

@@ -1,37 +1,16 @@
-# Customer FAQ (RAG corpus)
+# SteelHub Logistics FAQ (Singapore)
 
-## Returns
-You can request a no-reason return within 7 days of delivery if the item is unused and sealed.
-Clearance items are excluded.
+## How do I track a shipment?
+Share your shipment id (`SHP-2001`) or ask “track SHP-2001”. Ambiguous “where is my parcel?” will ask you for the SHP id first.
 
-## Refund Timing
-Approved refunds usually arrive in 1–3 business days for wallets, or 3–7 business days for cards.
-Order status becomes `refunded` after success.
+## What is the inbound SLA?
+Standard pallet inbound is dock-to-putaway within 4 hours during Jurong West business hours. See inbound SLA policy.
 
-## Tracking
-Shipped orders include a carrier tracking number (SF / YT / ZT). Processing orders have no tracking yet.
+## Which carrier should I use?
+Ninja Van for cost-efficient B2C, SingPost for documents/PO Box, GrabExpress for same-day urgent. See carrier matrix.
 
-## Shipping Fees
-Free shipping over 99 CNY. Buyer pays return shipping for no-reason returns; seller pays for quality issues.
+## How do freight claims work?
+Open a claim within 7 calendar days with SHP id and photos. See freight claims policy.
 
-## Invoices
-Request an e-invoice from the order page; issuance usually completes within 24 hours.
-
-## Product Lookup
-Ask for a product by name or SKU (for example Wireless Earbuds Pro or SKU-EAR-PRO) to see price, specs, warranty, and what is in the box.
-
-## Product Compare
-Say “compare earbuds”, “compare keyboards”, or “compare SKU-EAR-PRO and SKU-EAR-LITE” for a side-by-side spec table.
-
-## Popular SKUs
-- SKU-EAR-PRO / SKU-EAR-LITE — earbuds
-- SKU-KB-MECH / SKU-KB-65 — keyboards
-- SKU-ARM-MON / SKU-ARM-DUAL — monitor arms
-- SKU-HUB-USC / SKU-DOCK-PRO — hubs and docks
-- SKU-CHR-ERG / SKU-CHR-PLUS — chairs
-
-## Account Help
-Agents cannot share plaintext passwords. Use the password-reset flow.
-
-## Human Agent
-Say "talk to a human" or "escalate" for complaints, legal issues, or high-value disputes.
+## Can I upload my own SOP?
+Yes — Ops → Upload document (PDF / MD / TXT), then Re-ingest. The bot can answer from your uploaded file.

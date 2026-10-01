@@ -3,24 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SteelShop Care</title>
+  <title>SteelHub Logistics Care</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260327-catalog" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261001-logistics" />
 </head>
 <body>
   <header class="topbar">
     <div class="brand-block">
       <div class="logo-mark" aria-hidden="true"></div>
       <div>
-        <p class="brand">SteelShop Care</p>
-        <p class="brand-sub">Customer support</p>
+        <p class="brand">SteelHub Logistics Care</p>
+        <p class="brand-sub">Singapore 3PL / warehouse desk</p>
       </div>
     </div>
     <div class="top-metrics" id="topMetrics">
-      <div class="metric"><span class="m-label">Orders</span><strong id="mOrders">—</strong></div>
-      <div class="metric"><span class="m-label">Payments</span><strong id="mPay">—</strong></div>
+      <div class="metric"><span class="m-label">Shipments</span><strong id="mOrders">—</strong></div>
+      <div class="metric"><span class="m-label">Inventory</span><strong id="mPay">—</strong></div>
       <div class="metric"><span class="m-label">Tickets</span><strong id="mTickets">—</strong></div>
     </div>
     <div class="top-actions">
@@ -46,13 +46,15 @@
         <h2>Route</h2>
         <ol class="pipeline" id="pipeline">
           <li data-node="supervisor">Router</li>
+          <li data-node="clarify">Clarify</li>
           <li data-node="smalltalk">Greeting</li>
-          <li data-node="faq">Policy</li>
-          <li data-node="product">Products</li>
-          <li data-node="order">Orders</li>
+          <li data-node="faq">Policy RAG</li>
+          <li data-node="product">Carriers</li>
+          <li data-node="order">Shipments</li>
+          <li data-node="inventory">Inventory</li>
+          <li data-node="react">ReAct</li>
           <li data-node="payment">Payments</li>
-          <li data-node="refund">Refunds</li>
-          <li data-node="loyalty">Loyalty</li>
+          <li data-node="refund">Claims/Refund</li>
           <li data-node="escalate">Human</li>
           <li data-node="handoff">Paused</li>
         </ol>
@@ -61,16 +63,14 @@
       <section class="rail-section">
         <h2>Try</h2>
         <div class="chips" id="quickIntents">
-          <button type="button" data-q="What is the return policy window?">Return policy</button>
-          <button type="button" data-q="How do loyalty points work?">Loyalty policy</button>
-          <button type="button" data-q="Tell me about Wireless Earbuds Pro">Earbuds Pro specs</button>
-          <button type="button" data-q="Compare earbuds">Compare earbuds</button>
-          <button type="button" data-q="Compare Mechanical Keyboard and Compact Keyboard 65%">Compare keyboards</button>
-          <button type="button" data-q="Search products for desk setup">Search desk products</button>
-          <button type="button" data-q="Check order ORD-1001">Order ORD-1001</button>
-          <button type="button" data-q="Show tracking timeline for ORD-1001">Tracking</button>
-          <button type="button" data-q="Please refund ORD-1002">Refund ORD-1002</button>
-          <button type="button" data-q="Cancel order ORD-1003">Cancel ORD-1003</button>
+          <button type="button" data-q="What is your inbound SLA in Singapore?">Inbound SLA</button>
+          <button type="button" data-q="Compare Ninja Van vs SingPost for last-mile">Carriers</button>
+          <button type="button" data-q="Track SHP-2001">Track SHP-2001</button>
+          <button type="button" data-q="Where is my parcel?">Ambiguous track</button>
+          <button type="button" data-q="Inventory lookup for SKU-PALLET-WRAP">Inventory SKU</button>
+          <button type="button" data-q="What is the freight claims window?">Claims policy</button>
+          <button type="button" data-q="GST invoice notes for Singapore">GST notes</button>
+          <button type="button" data-q="Use tools to track SHP-2001 and also check outbound cut-off">ReAct multi-tool</button>
           <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate</button>
         </div>
       </section>
@@ -80,7 +80,7 @@
       <div class="stage-head">
         <div>
           <h1>Thread</h1>
-          <p class="muted" id="threadHint">Ask policies, product specs, or compare catalog items</p>
+          <p class="muted" id="threadHint">Ask SLA, track SHP-xxxx, inventory, or upload an SOP in Ops</p>
         </div>
         <div class="route-pill" id="routePill">router</div>
       </div>
@@ -92,7 +92,7 @@
 
       <form id="chatForm" class="composer">
         <div class="composer-shell">
-          <textarea id="messageInput" rows="2" placeholder="Ask about an order, policy, refund…"></textarea>
+          <textarea id="messageInput" rows="2" placeholder="Ask about inbound SLA, SHP-2001, inventory…"></textarea>
           <div class="composer-bar">
             <span class="hint">Enter to send</span>
             <button type="submit" id="sendBtn">Send</button>
@@ -111,7 +111,7 @@
         <article class="panel-block">
           <h3>Session</h3>
           <dl class="kv" id="contextKv">
-            <div><dt>Order</dt><dd id="ctxOrder">—</dd></div>
+            <div><dt>Shipment</dt><dd id="ctxOrder">—</dd></div>
             <div><dt>Payment</dt><dd id="ctxPayment">—</dd></div>
             <div><dt>Route</dt><dd id="ctxAgent">—</dd></div>
             <div><dt>Bot</dt><dd id="ctxBot">active</dd></div>
@@ -121,12 +121,12 @@
         </article>
         <article class="panel-block">
           <h3>Account</h3>
-          <p class="muted small" id="profileHint">Look up an order to bind account context. VIP shows on ORD-1005.</p>
+          <p class="muted small" id="profileHint">Look up a shipment to bind shipper context. VIP on SHP-2005.</p>
           <dl class="kv" id="profileKv"></dl>
         </article>
         <article class="panel-block" id="handoffPanel">
           <h3>Agent assist</h3>
-          <p class="muted small">After escalate / over-limit refund, reply here.</p>
+          <p class="muted small">After escalate, reply here.</p>
           <div id="assistBox" class="assist-box">No draft yet.</div>
           <textarea id="humanMsg" rows="3" placeholder="Agent reply…" class="human-box"></textarea>
           <div class="handoff-actions">
@@ -147,17 +147,17 @@
         </article>
         <article class="panel-block">
           <div class="row-head">
-            <h3>Catalog</h3>
-            <button type="button" class="ghost" id="refreshProducts">Refresh</button>
-          </div>
-          <div id="products" class="feed"></div>
-        </article>
-        <article class="panel-block">
-          <div class="row-head">
-            <h3>Orders</h3>
+            <h3>Shipments</h3>
             <button type="button" class="ghost" id="refreshOrders">Refresh</button>
           </div>
           <div id="orders" class="feed"></div>
+        </article>
+        <article class="panel-block">
+          <div class="row-head">
+            <h3>Inventory</h3>
+            <button type="button" class="ghost" id="refreshProducts">Refresh</button>
+          </div>
+          <div id="products" class="feed"></div>
         </article>
         <article class="panel-block">
           <div class="row-head">
@@ -170,9 +170,18 @@
 
       <div class="tab-panel" id="panel-ops">
         <article class="panel-block">
+          <h3>Upload SOP (PDF / MD / TXT)</h3>
+          <p class="muted small">Max 5MB. File is chunked into the vector store and searchable in chat.</p>
+          <input type="file" id="uploadFile" accept=".pdf,.md,.txt,.markdown,text/plain,application/pdf" />
+          <div class="handoff-actions" style="margin-top:8px">
+            <button type="button" class="ghost" id="btnUpload">Upload &amp; ingest</button>
+          </div>
+          <div id="uploadList" class="feed"></div>
+        </article>
+        <article class="panel-block">
           <h3>Your OpenAI key (BYOK)</h3>
           <p class="muted small">
-            Optional. Stored only in this browser tab (sessionStorage). Sent with each chat request for policy answers — never written to the database.
+            Optional. Stored only in this browser tab. Sent with each chat for policy wording — never written to DB.
           </p>
           <input
             id="byokKey"
@@ -211,13 +220,13 @@
           <pre class="ops-pre" id="opsDebug">Enable Debug, then send a message.</pre>
         </article>
         <article class="panel-block actions">
-          <button type="button" class="ghost wide" id="btnReingest">Re-ingest policies</button>
+          <button type="button" class="ghost wide" id="btnReingest">Re-ingest policies + uploads</button>
           <button type="button" class="ghost wide" id="btnReseed">Reset demo data</button>
         </article>
       </div>
     </aside>
   </main>
 
-  <script src="/static/app.js?v=20260327-catalog2"></script>
+  <script src="/static/app.js?v=20261001-logistics"></script>
 </body>
 </html>

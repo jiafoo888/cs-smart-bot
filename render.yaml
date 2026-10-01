@@ -1,8 +1,8 @@
-# Render Blueprint — free web service
+# Render Blueprint — keep service name aligned with live URL cs-smart-bot.onrender.com
 # https://render.com/docs/blueprint-spec
 services:
   - type: web
-    name: steelshop-care
+    name: cs-smart-bot
     runtime: docker
     plan: free
     healthCheckPath: /health
@@ -18,4 +18,4 @@ services:
       - key: DATABASE_URL
         value: sqlite+aiosqlite:///./data/cs_bot.db
       - key: COMPANY_NAME
-        value: SteelShop
+        value: SteelHub Logistics

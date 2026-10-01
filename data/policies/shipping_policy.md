@@ -1,20 +1,11 @@
-# SteelShop Shipping Policy
+# Storage and shipping fees (Singapore demo)
 
-## Dispatch SLA
-Orders paid before 16:00 on business days usually ship the same or next day.
-Remote regions may take 1–2 extra days.
+## Storage
+Pallet storage billed monthly in **SGD**. First 7 days free for new ASN trial accounts in this demo.
 
-## Carriers
-Common carriers: SF Express (SF), YTO (YT), ZTO (ZT). Large furniture may use freight lines.
+## Fulfilment pick & pack
+Standard B2C pick/pack: from **SGD 1.20** per order + weight tier.
+B2B carton pick: from **SGD 0.80** per carton.
 
-## Tracking
-Shipped orders have a tracking number. Orders in `processing` or `paid` do not have tracking yet.
-Report package issues within 48 hours of delivery and keep the outer packaging.
-
-## Shipping Fees
-Free shipping over 99 CNY (remote areas excluded). Buyer pays return shipping for no-reason returns;
-SteelShop pays return shipping for approved quality issues.
-
-## Failed Delivery
-If a package is returned because of a bad address or failed pickup, a second delivery attempt
-may incur an extra fee after customer confirmation.
+## Shipping
+Last-mile is passed through at carrier rate + SteelHub handling. See carrier matrix for Ninja Van / SingPost / GrabExpress.

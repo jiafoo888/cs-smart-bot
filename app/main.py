@@ -1,10 +1,10 @@
-"""FastAPI enterprise CS console API + static UI."""
+"""FastAPI SteelHub Logistics Care API + static UI."""
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +20,7 @@ from app.db.enterprise_ops import (
     resume_bot,
     save_satisfaction,
 )
+from app.db.inventory import list_inventory
 from app.db.repository import (
     list_chat_logs,
     list_orders,
@@ -35,6 +36,7 @@ from app.graph.supervisor import chat
 from app.mcp_bridge import list_mcp_tools
 from app.rag.ingest import ingest_all_policies, knowledge_base_stats
 from app.rag.retriever import format_context, retrieve_faq
+from app.rag.uploads import list_uploads, save_upload
 from app.trust import (
     build_assist,
     customer_360,
@@ -55,9 +57,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="SteelShop Care — Enterprise CS Agent",
-    description="Deployable multi-agent customer service: LangGraph + Chroma RAG + MCP + orders/payments",
-    version="2.0.0",
+    title="SteelHub Logistics Care — Singapore 3PL Agent",
+    description="LangGraph multi-agent logistics CS: Chroma RAG · ReAct · clarify · upload ingest",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -110,7 +112,7 @@ async def root():
     index = static_dir / "index.html"
     if index.exists():
         return FileResponse(index)
-    return {"name": "SteelShop Care", "docs": "/docs"}
+    return {"name": "SteelHub Logistics Care", "docs": "/docs"}
 
 
 @app.get("/health")
@@ -119,8 +121,9 @@ async def health():
     kb = knowledge_base_stats()
     return {
         "status": "ok",
-        "service": "SteelShop Care",
-        "version": "2.1.0",
+        "service": "SteelHub Logistics Care",
+        "version": "3.0.0",
+        "region": "Singapore",
         "mock_llm": s.use_mock_llm or not s.openai_api_key,
         "byok": True,
         "openai_model": s.openai_model,
@@ -135,12 +138,12 @@ async def health():
         },
         "mcp_tools": list_mcp_tools(),
         "use_mcp_stdio": s.use_mcp_stdio,
+        "mvp": "docs/MVP.md",
     }
 
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(body: ChatRequest):
-    # Key is request-scoped only; never persisted by chat() / chat_logs
     result = await chat(
         body.session_id,
         body.message,
@@ -156,11 +159,17 @@ async def api_list_orders(status: str | None = None, limit: int = Query(50, le=2
     return {"items": list_orders(limit=limit, status=status)}
 
 
+@app.get("/api/shipments")
+async def api_list_shipments(status: str | None = None, limit: int = Query(50, le=200)):
+    """Alias of orders for logistics naming (SHP-xxxx)."""
+    return {"items": list_orders(limit=limit, status=status)}
+
+
 @app.get("/api/orders/{order_id}")
 async def api_get_order(order_id: str):
     data = lookup_order(order_id)
     if not data:
-        raise HTTPException(404, f"Order {order_id} not found")
+        raise HTTPException(404, f"Shipment/order {order_id} not found")
     return data
 
 
@@ -184,6 +193,11 @@ async def api_get_payment(payment_id: str):
     return data
 
 
+@app.get("/api/inventory")
+async def api_inventory(limit: int = Query(50, le=200)):
+    return {"items": list_inventory(limit=limit)}
+
+
 @app.get("/api/tickets")
 async def api_list_tickets(limit: int = Query(50, le=200)):
     return {"items": list_tickets(limit=limit)}
@@ -201,7 +215,7 @@ async def api_policy_search(q: str = Query(..., min_length=1), k: int = Query(4,
         "query": q,
         "hits": hits,
         "context": format_context(hits),
-        "store": "chroma",
+        "store": get_settings().vector_store,
         "chunk_size": get_settings().rag_chunk_size,
     }
 
@@ -209,6 +223,23 @@ async def api_policy_search(q: str = Query(..., min_length=1), k: int = Query(4,
 @app.get("/api/kb/stats")
 async def api_kb_stats():
     return knowledge_base_stats()
+
+
+@app.get("/api/uploads")
+async def api_list_uploads():
+    return {"items": list_uploads()}
+
+
+@app.post("/api/uploads")
+async def api_upload(file: UploadFile = File(...)):
+    raw = await file.read()
+    try:
+        result = save_upload(file.filename or "upload.txt", raw, mime=file.content_type or "")
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"Upload failed: {exc}") from exc
+    return result
 
 
 @app.get("/api/metrics/overview")
@@ -224,12 +255,14 @@ async def api_metrics():
     sla_breached = sum(1 for t in tickets_open if t.get("sla_status") == "breached")
     return {
         "orders_total": len(orders),
+        "shipments_total": len(orders),
         "orders_by_status": by_status,
         "payments_total": len(payments),
         "payments_succeeded": pay_ok,
         "tickets_open": len(tickets_open),
         "tickets_sla_breached": sla_breached,
         "tickets_total": len(tickets),
+        "inventory_skus": len(list_inventory(limit=200)),
         "kb": knowledge_base_stats(),
         "agents": [
             "supervisor",
@@ -240,11 +273,15 @@ async def api_metrics():
             "payment",
             "refund",
             "loyalty",
+            "inventory",
+            "react",
+            "clarify",
             "escalate",
             "csat",
             "handoff",
         ],
         "auto_refund_limit": 300,
+        "region": "Singapore",
     }
 
 

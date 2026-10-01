@@ -19,6 +19,17 @@ from app.db.repository import append_chat_log, create_ticket, lookup_order
 from app.mcp_bridge import call_mcp_tool
 from app.rag.retriever import retrieve_faq, sources_for_ui
 from app.catalog import extract_product_query
+from app.agents.clarify import (
+    ClarifyState,
+    apply_user_fill,
+    clarify_prompt,
+    clear_clarify,
+    get_clarify,
+    needs_clarification,
+    set_clarify,
+)
+from app.agents.consistency import evidence_from_hits, evidence_from_tool, verify_draft
+from app.agents.react_agent import run_react
 from app.response import (
     compose_address_answer,
     compose_approval_hold,
@@ -63,7 +74,17 @@ from app.trust import (
 )
 
 AgentName = Literal[
-    "smalltalk", "faq", "product", "order", "payment", "refund", "loyalty", "escalate", "finish"
+    "smalltalk",
+    "faq",
+    "product",
+    "order",
+    "payment",
+    "refund",
+    "loyalty",
+    "inventory",
+    "react",
+    "escalate",
+    "finish",
 ]
 
 
@@ -165,11 +186,17 @@ def route_intent(state: CSState) -> dict:
             "what's your",
             "what are your",
             "warranty",
+            "inbound sla",
+            "outbound",
+            "cut-off",
+            "cutoff",
+            "gst",
+            "claim window",
+            "freight claim",
         )
     )
-    wants_invoice = any(k in t for k in ("invoice", "e-invoice", "fapiao")) and not asking_policy
-    # "invoice policy" stays FAQ; "issue invoice for ORD" is order tool
-    if "invoice" in t and ("policy" in t or "how" in t or "what is" in t):
+    wants_invoice = any(k in t for k in ("invoice", "e-invoice", "fapiao", "tax invoice")) and not asking_policy
+    if "invoice" in t and ("policy" in t or "how" in t or "what is" in t or "gst" in t):
         wants_invoice = False
         asking_policy = True
 
@@ -184,21 +211,35 @@ def route_intent(state: CSState) -> dict:
             "product",
             "catalog",
             "sku-",
-            "earbuds",
-            "keyboard",
-            "monitor arm",
-            "usb-c hub",
-            "dock",
-            "ergonomic chair",
+            "carrier",
+            "ninja van",
+            "singpost",
+            "grabexpress",
             "tell me about",
             "difference between",
         )
     ) or bool(extract_product_query(text))
 
+    wants_inventory = any(
+        k in t for k in ("inventory", "stock level", "on hand", "on-hand", "bin location")
+    ) or ("sku-" in t and any(k in t for k in ("where", "qty", "quantity", "stock")))
+
+    wants_react = any(
+        k in t
+        for k in ("react", "multi-tool", "think step", "use tools to")
+    ) or (
+        oid_in_msg
+        and any(k in t for k in ("and also", "then check", "as well as policy"))
+    )
+
     if is_greeting(t):
         nxt: AgentName = "smalltalk"
     elif any(k in t for k in ("human", "agent", "escalate", "complaint", "manager", "lawyer")):
         nxt = "escalate"
+    elif wants_react:
+        nxt = "react"
+    elif wants_inventory:
+        nxt = "inventory"
     elif any(k in t for k in ("points", "loyalty", "coupon", "coupons", "rewards")) and any(
         k in t for k in ("how", "what", "policy", "work", "earn", "redeem", "expire")
     ) and not oid_in_msg:
@@ -213,20 +254,24 @@ def route_intent(state: CSState) -> dict:
             "tracking events",
             "tracking timeline",
             "track package",
+            "track shipment",
+            "track shp",
             "where is my package",
+            "where is my parcel",
+            "where is my shipment",
             "exchange",
             "nudge",
             "hurry",
             "ship sooner",
-            "催发货",
             "cancel order",
             "cancel my",
+            "cancel shp",
             "cancel ord",
             "update address",
             "change address",
             "new address",
         )
-    ) or ("cancel" in t and ("order" in t or oid_in_msg)):
+    ) or ("cancel" in t and ("order" in t or "shipment" in t or oid_in_msg)):
         nxt = "order"
     elif any(k in t for k in ("refund", "return my", "i want to return", "give me my money")) or (
         "return" in t and oid and not asking_policy
@@ -235,11 +280,25 @@ def route_intent(state: CSState) -> dict:
     elif pid or any(k in t for k in ("payment", "paid", "charge", "transaction", "pay-")):
         nxt = "payment"
     elif oid or any(
-        k in t for k in ("order", "tracking", "shipment", "shipping", "where is my")
+        k in t for k in ("order", "tracking", "shipment", "shipping", "where is my", "parcel", "awb")
     ):
         nxt = "order"
     elif asking_policy or any(
-        k in t for k in ("policy", "return", "refund", "shipping", "warranty", "loyalty policy")
+        k in t
+        for k in (
+            "policy",
+            "return",
+            "refund",
+            "shipping",
+            "warranty",
+            "loyalty policy",
+            "sla",
+            "carrier",
+            "ninja",
+            "inbound",
+            "outbound",
+            "claim",
+        )
     ):
         nxt = "faq"
     elif wants_product:
@@ -287,15 +346,18 @@ async def faq_agent(state: CSState) -> dict:
     hits = retrieve_faq(q)
     _ = await call_mcp_tool("search_company_policy", {"query": q})
     answer = compose_policy_answer(q, hits)
+    checked = verify_draft(answer, evidence_from_hits(hits))
     return {
-        "messages": [AIMessage(content=answer)],
+        "messages": [AIMessage(content=checked["draft"])],
         "last_agent": "faq",
         "next_agent": "finish",
         "sources": sources_for_ui(hits),
         "debug": {
             "rag_via": "chroma+grounded_generate",
-            "pipeline": ["retrieve", "ground", "respond"],
+            "pipeline": ["retrieve", "ground", "verify", "respond"],
             "llm_mode": llm_mode(),
+            "consistency_ok": checked.get("ok"),
+            "consistency_issues": checked.get("issues") or [],
             "hits": [
                 {
                     "source": h.get("source"),
@@ -307,6 +369,48 @@ async def faq_agent(state: CSState) -> dict:
             ],
         },
     }
+
+
+async def inventory_agent(state: CSState) -> dict:
+    from app.agents.clarify import extract_sku
+    from app.db.inventory import lookup_sku
+
+    text = _last_user_text(state)
+    sku = extract_sku(text)
+    if not sku:
+        return _finish(
+            "Which SKU should I check? Example: SKU-PALLET-WRAP.",
+            "inventory",
+        )
+    data = lookup_sku(sku)
+    if not data.get("ok"):
+        return _finish(data.get("error") or f"SKU {sku} not found.", "inventory", debug={"inventory": data})
+    msg = (
+        f"{data['sku']} ({data.get('name')}): **{data['qty_on_hand']}** {data.get('uom', 'EA')} on hand "
+        f"in zone {data.get('zone')} / bin {data.get('bin')}."
+    )
+    checked = verify_draft(msg, evidence_from_tool(data))
+    return _finish(
+        checked["draft"],
+        "inventory",
+        debug={"inventory": data, "consistency_ok": checked.get("ok")},
+    )
+
+
+async def react_agent(state: CSState) -> dict:
+    q = _last_user_text(state)
+    result = await run_react(q)
+    checked = verify_draft(result["reply"], result.get("observations") or [])
+    return _finish(
+        checked["draft"],
+        "react",
+        order_id=extract_order_id(q),
+        debug={
+            "react_trace": result.get("trace"),
+            "consistency_ok": checked.get("ok"),
+            "pipeline": ["thought", "action", "observation", "verify"],
+        },
+    )
 
 
 
@@ -425,7 +529,7 @@ async def order_agent(state: CSState) -> dict:
         )
     ) or ("tracking" in t and oid):
         if not oid:
-            msg = "Share an order id (e.g. ORD-1001) and I'll pull the carrier timeline."
+            msg = "Share a shipment id (e.g. SHP-2001) and I'll pull the carrier timeline."
             return {
                 "messages": [AIMessage(content=msg)],
                 "last_agent": "order",
@@ -513,7 +617,7 @@ async def order_agent(state: CSState) -> dict:
         }
 
     if not oid:
-        msg = "Sure — what's the order id? It looks like ORD-1001."
+        msg = "Sure — what's the shipment id? It looks like SHP-2001."
         return {
             "messages": [AIMessage(content=msg)],
             "last_agent": "order",
@@ -542,8 +646,9 @@ async def order_agent(state: CSState) -> dict:
         pays = json.loads(pay_raw).get("payments") or []
 
     msg = compose_order_answer(data, pays, verified=True)
+    checked = verify_draft(msg, evidence_from_tool(data))
     return {
-        "messages": [AIMessage(content=msg)],
+        "messages": [AIMessage(content=checked["draft"])],
         "last_agent": "order",
         "order_id": oid,
         "next_agent": "finish",
@@ -552,6 +657,7 @@ async def order_agent(state: CSState) -> dict:
             "mcp_tool": "get_order_status",
             "order": data,
             "tier": ident.get("tier"),
+            "consistency_ok": checked.get("ok"),
         },
     }
 
@@ -680,6 +786,8 @@ def build_graph(checkpointer: MemorySaver | None = None):
     g.add_node("payment", payment_agent)
     g.add_node("refund", refund_agent)
     g.add_node("loyalty", loyalty_agent)
+    g.add_node("inventory", inventory_agent)
+    g.add_node("react", react_agent)
     g.add_node("escalate", escalate_agent)
 
     g.add_edge(START, "supervisor")
@@ -694,10 +802,23 @@ def build_graph(checkpointer: MemorySaver | None = None):
             "payment": "payment",
             "refund": "refund",
             "loyalty": "loyalty",
+            "inventory": "inventory",
+            "react": "react",
             "escalate": "escalate",
         },
     )
-    for node in ("smalltalk", "faq", "product", "order", "payment", "refund", "loyalty", "escalate"):
+    for node in (
+        "smalltalk",
+        "faq",
+        "product",
+        "order",
+        "payment",
+        "refund",
+        "loyalty",
+        "inventory",
+        "react",
+        "escalate",
+    ):
         g.add_edge(node, END)
 
     memory = checkpointer or MemorySaver()
@@ -769,7 +890,7 @@ async def _chat_inner(session_id: str, message: str) -> dict:
             if pending.get("requires_approval"):
                 ticket = create_ticket(
                     session_id=session_id,
-                    summary=f"{pending['action']} approval for {pending['order_id']} (¥{pending['amount']})",
+                    summary=f"{pending['action']} approval for {pending['order_id']} (SGD {pending['amount']})",
                     category="refund_approval",
                     order_id=pending.get("order_id"),
                     over_limit=True,
@@ -804,11 +925,35 @@ async def _chat_inner(session_id: str, message: str) -> dict:
             return _pack(compose_denied_mutation(), "order", order_id=pending.get("order_id"))
         return _pack(compose_pending_reminder(pending), "order", order_id=pending.get("order_id"))
 
+    # Clarification loop (MVP C4) — ask until slots filled, max 2 turns
+    existing = get_clarify(session_id)
+    working_message = message
+    if existing:
+        filled = apply_user_fill(session_id, message, existing)
+        if isinstance(filled, ClarifyState):
+            return _pack(
+                clarify_prompt(filled),
+                "clarify",
+                debug={"clarify": {"intent": filled.intent, "missing": filled.missing, "turns": filled.turns}},
+            )
+        if isinstance(filled, str) and filled.startswith("I still need"):
+            return _pack(filled, "clarify", debug={"clarify": "exhausted"})
+        working_message = filled if isinstance(filled, str) else message
+    else:
+        need = needs_clarification(message)
+        if need:
+            set_clarify(session_id, need)
+            return _pack(
+                clarify_prompt(need),
+                "clarify",
+                debug={"clarify": {"intent": need.intent, "missing": need.missing}},
+            )
+
     graph = get_graph()
     config = {"configurable": {"thread_id": session_id}}
     result = await graph.ainvoke(
         {
-            "messages": [HumanMessage(content=message)],
+            "messages": [HumanMessage(content=working_message)],
             "session_id": session_id,
         },
         config=config,

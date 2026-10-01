@@ -1,17 +1,16 @@
-# SteelShop Support SLA & Response Standards
+# Support SLA — SteelHub Logistics Care (Singapore)
 
-## First Response Time
-Live chat and in-app bot: automated first response under 10 seconds.
-Human takeover after escalation: target first human reply within 15 minutes during support hours (09:00–22:00 UTC+8).
+## Channels
+- Chat bot (this console): 24/7 for tracking, policy, inventory lookup, and draft replies
+- Human queue: Mon–Sat **09:00–21:00 SGT**
 
-## Resolution Targets
-- Order / tracking questions: same conversation when data is available
-- Payment investigations: within 1 business day
-- Return / refund decisions: within 1–2 business days after evidence review
-- Account security incidents: escalate immediately
+## Ticket priorities
+| Priority | First response | Example |
+|----------|----------------|---------|
+| urgent | 15 minutes | safety / compliance hold |
+| high | 60 minutes | damage claim, VIP shipper |
+| normal | 4 hours | general tracking, ASN questions |
+| low | 1 business day | documentation copy |
 
-## Channel Coverage
-Supported channels in this demo: Web console chat. Enterprise deployments can add email, WhatsApp, and in-app SDK with the same supervisor graph.
-
-## Quality Bar
-Answers about policy must be grounded in the knowledge base. Order and payment facts must come from the system of record (database tools). Agents must not invent tracking numbers or refund timelines.
+## Bot to human
+Say **escalate**, **talk to a human**, or **complaint** to open a ticket and pause the bot. An agent can reply in Ops / Case, then resume the bot.

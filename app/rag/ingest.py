@@ -15,6 +15,16 @@ from app.rag.store import build_from_documents
 
 def _category_from_name(name: str) -> str:
     n = name.lower()
+    if "inbound" in n:
+        return "inbound"
+    if "outbound" in n or "cutoff" in n:
+        return "outbound"
+    if "carrier" in n:
+        return "carrier"
+    if "claim" in n or "freight" in n:
+        return "claims"
+    if "gst" in n or "invoice" in n or "payment" in n:
+        return "invoice"
     if "return" in n or "refund" in n:
         return "return_refund"
     if "warranty" in n:
@@ -27,8 +37,6 @@ def _category_from_name(name: str) -> str:
         return "exchange"
     if "delivery" in n:
         return "shipping"
-    if "payment" in n or "invoice" in n:
-        return "payment"
     if "privacy" in n or "security" in n:
         return "privacy"
     if "sla" in n or "support" in n or "company" in n:
@@ -37,6 +45,8 @@ def _category_from_name(name: str) -> str:
         return "shipping"
     if "faq" in n:
         return "faq"
+    if "upload" in n:
+        return "upload"
     return "policy"
 
 
@@ -121,32 +131,10 @@ def load_documents() -> list[Document]:
 
 
 def ingest_all_policies() -> dict:
-    settings = get_settings()
-    # Refresh structured catalog → markdown so RAG stays in sync
-    try:
-        from app.catalog import ensure_catalog_markdown, reload_products
+    """Full rebuild: policies + catalog markdown + user uploads."""
+    from app.rag.uploads import ingest_all_with_uploads
 
-        reload_products()
-        ensure_catalog_markdown()
-    except Exception:
-        pass
-    docs = load_documents()
-    build_from_documents(docs)
-    by_cat: dict[str, int] = {}
-    for d in docs:
-        cat = d.metadata.get("category", "policy")
-        by_cat[cat] = by_cat.get(cat, 0) + 1
-    return {
-        "chunks": len(docs),
-        "files": [p.name for p in collect_policy_files()],
-        "categories": by_cat,
-        "chunk_size": settings.rag_chunk_size,
-        "chunk_overlap": settings.rag_chunk_overlap,
-        "top_k": settings.rag_top_k,
-        "backend": settings.vector_store,
-        "vector_library": settings.vector_store,
-        "embedding_backend": settings.embedding_backend,
-    }
+    return ingest_all_with_uploads()
 
 
 def knowledge_base_stats() -> dict:

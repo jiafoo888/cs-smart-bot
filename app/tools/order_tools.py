@@ -12,7 +12,8 @@ from app.mcp_bridge import call_mcp_tool
 
 
 def extract_order_id(text: str) -> str | None:
-    m = re.search(r"ORD-\d{4}", text.upper())
+    """Shipment (SHP-xxxx) or legacy order (ORD-xxxx) id."""
+    m = re.search(r"(?:SHP|ORD)-\d{4}", text.upper())
     return m.group(0) if m else None
 
 

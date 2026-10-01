@@ -1,38 +1,28 @@
-# SteelShop Care — Enterprise Customer Service Agent
+# SteelHub Logistics Care — Singapore 3PL / warehouse CS agent
 
-Deployable multi-agent CS platform for answering shoppers with **grounded policy RAG**, **order/payment tools**, and a **LangGraph supervisor**.
+Deployable multi-agent logistics desk: **LangGraph** supervisor, **LangChain RAG** (Chroma or simple), **ReAct**, **clarify + consistency**, **PDF/MD/TXT upload ingest**, FastAPI console.
 
-## What enterprises get
+**Source of truth:** [`docs/MVP.md`](./docs/MVP.md) — every code change must follow it.  
+**Learn how it was built:** [`docs/learning/`](./docs/learning/)
 
-| Layer | Capability |
-|-------|------------|
-| Conversation UI | Full ops console (inbox, chat, KB, 360, agent assist) |
-| LangGraph | Supervisor → greeting / policy / order / payment / refund / human |
-| Trust | Phone/email verify, PII redaction, refund confirm, ¥300 auto-limit |
-| RAG | LangChain + Chroma, section-aware chunking, tunable `chunk_size` / `overlap` / `top_k` |
-| Systems of record | SQLite customers (VIP tiers) · orders · payments · SLA tickets · chat audit |
-| MCP | Same tools exposed via `python -m app.mcp_server` |
-| Ship | FastAPI + Docker Compose |
-
-## Deploy (resume / interview demo)
-
-Free public URL via **Render** (Docker + HTTPS):
-
-1. Push this repo to GitHub  
-2. Follow **[DEPLOY.md](./DEPLOY.md)** (Blueprint uses `render.yaml`)  
-3. Put the live link on your resume:
+## Live demo
 
 ```text
-SteelShop Care — multi-agent CS demo (LangGraph + RAG + tools)
-Live: https://cs-smart-bot.onrender.com
+https://cs-smart-bot.onrender.com
 ```
 
-Local production image:
+(Free Render cold-start ~30–60s after idle.)
 
-```bash
-docker build -t steelshop-care .
-docker run --rm -p 8000:8000 -e PORT=8000 steelshop-care
-```
+## Stack (MVP)
+
+| Layer | Choice |
+|-------|--------|
+| Orchestration | LangGraph supervisor + agents |
+| RAG | LangChain loaders/splitters + Chroma (local) / simple numpy (Render) |
+| Reasoning | ReAct tool loop + clarify slots + consistency verifier |
+| Tools | MCP map + in-process bridge |
+| SoR | SQLite shippers · SHP shipments · inventory · tickets · uploads |
+| Ship | Docker → Render · GitHub Actions CI |
 
 ## Run locally
 
@@ -42,45 +32,27 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 export EMBEDDING_BACKEND=hash
-python -m app.bootstrap          # DB seed + Chroma ingest
+# optional: export VECTOR_STORE=chroma
+python -m app.bootstrap
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Open **http://127.0.0.1:8000/** — SteelShop Care console.
-
-## Docker (production-shaped)
-
-```bash
-docker compose up --build
-# http://localhost:8000/
-```
-
-## RAG knobs (`.env`)
-
-```
-RAG_CHUNK_SIZE=450
-RAG_CHUNK_OVERLAP=90
-RAG_TOP_K=4
-RAG_MIN_SCORE=0.12
-EMBEDDING_BACKEND=hash   # or st / auto with sentence-transformers
-```
-
-Re-ingest after changing policies: `POST /api/admin/reingest` or UI **Ops → Re-ingest policies**.
-
-## Eval
-
-```bash
-python test.py
-# Optional: LANGCHAIN_API_KEY + OPENAI_API_KEY for LangSmith / DeepEval
-```
+Open **http://127.0.0.1:8000/**
 
 ## Demo scripts
 
-- `What is the return policy window?` → grounded policy answer + source chips  
-- `Tell me about Wireless Earbuds Pro` / `Compare earbuds` → full specs or side-by-side  
-- **Ops → Your OpenAI key** → paste key → policy answers use live model (BYOK; not stored)  
-- `Check order ORD-1001` → full order facts  
-- `Please refund ORD-1002` → YES confirm; over auto-limit → SLA ticket  
-- `hello` / off-topic → greeting, not stuck on prior order  
+1. `What is your inbound SLA in Singapore?` → policy RAG  
+2. `Track SHP-2001` → shipment tool  
+3. `Where is my parcel?` → clarify for SHP id  
+4. `Compare Ninja Van vs SingPost for last-mile` → carrier compare  
+5. Ops → upload a PDF SOP → ask a question only that file answers  
+6. `escalate` → ticket + pause bot  
 
-Learning notes: [LEARNING.md](./LEARNING.md)
+## CI / deploy
+
+- CI: `.github/workflows/ci.yml`  
+- Deploy notes: [`DEPLOY.md`](./DEPLOY.md) · Blueprint: `render.yaml` (service `cs-smart-bot`)
+
+```bash
+python test.py
+```

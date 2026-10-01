@@ -12,7 +12,7 @@ from langchain_core.documents import Document
 from app.config import get_settings
 from app.rag.embeddings import get_embeddings
 
-_COLLECTION = "steelshop_policies"
+_COLLECTION = "steelhub_logistics"
 
 
 class SimpleVectorStore:

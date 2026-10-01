@@ -1,22 +1,14 @@
-# SteelShop Company Policy
+# SteelHub Logistics — company overview (Singapore)
 
-## Company Overview
-SteelShop is an e-commerce brand for consumer electronics and office accessories.
-Customer support hours: 09:00–22:00 (UTC+8) every day.
+## Who we are
+SteelHub Logistics Care is a demo 3PL / warehouse customer-service agent for Singapore operations.
+Primary DC: **Jurong West** (postal `640903`). Cross-dock: **Tuas**.
 
-## Service Commitments
-Order facts come from the system database. Policy answers come from the knowledge base.
-Complaints that cannot be resolved by the bot are escalated to a human agent within 15 minutes.
+## What we help with
+- Inbound ASN and receiving SLA
+- Inventory location and on-hand qty
+- Outbound shipments (`SHP-xxxx`) and carrier tracking
+- Claims, GST invoice notes, and human escalation
 
-## Support Scope
-Agents can help with: order lookup, shipping tracking, payment status, returns/refunds guidance,
-invoice requests, and account-security tips.
-Agents must not: leak other customers' orders, alter payment results, reveal passwords, or give legal advice.
-
-## Human Escalation Rules
-Escalate when there is a legal dispute, safety concern, dispute amount >= 2000 CNY,
-media/PR risk, or the user explicitly asks for a human agent.
-
-## Privacy Summary
-Conversations may be audited for quality improvement. Personal data is not sold to third parties.
-See the privacy & security policy for details.
+## Hours
+Warehouse ops: Mon–Sat 08:00–18:00 SGT. Chat bot: always on for policy and shipment lookup.

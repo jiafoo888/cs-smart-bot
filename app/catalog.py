@@ -42,6 +42,8 @@ def get_product(sku_or_name: str) -> dict | None:
     q = (sku_or_name or "").strip().lower()
     if not q:
         return None
+    # strip trailing noise from compare phrases
+    q = re.sub(r"\s+for\s+.*$", "", q).strip()
     products = load_products()
     for p in products:
         if p["sku"].lower() == q or p["name"].lower() == q:
@@ -50,6 +52,19 @@ def get_product(sku_or_name: str) -> dict | None:
     for p in products:
         if q in p["name"].lower() or q in p["sku"].lower():
             return p
+    # token overlap (e.g. "ninja van" ↔ "Ninja Van last-mile")
+    tokens = [t for t in re.findall(r"[a-z0-9]+", q) if len(t) > 2]
+    if tokens:
+        best = None
+        best_score = 0
+        for p in products:
+            blob = f"{p.get('sku','')} {p.get('name','')} {p.get('compare_group','')}".lower()
+            score = sum(1 for t in tokens if t in blob)
+            if score > best_score and score >= max(1, len(tokens) - 1):
+                best_score = score
+                best = p
+        if best:
+            return best
     return None
 
 
@@ -108,7 +123,6 @@ def compare_products(a: str, b: str | None = None) -> dict:
         if peers:
             return _pair_compare(left, peers[0], note=f"Closest peer in {left.get('compare_group')} group")
         return {"ok": False, "error": f"No comparison peer found for {left['name']}"}
-    # try treat `a` as category/group keyword
     group_hits = products_in_group(a) or search_products(a, limit=4)
     if len(group_hits) >= 2:
         return _pair_compare(group_hits[0], group_hits[1], note=f"Top matches for “{a}”")
@@ -140,13 +154,14 @@ def _pair_compare(left: dict, right: dict, note: str | None = None) -> dict:
 
 
 def _verdict(left: dict, right: dict) -> str:
+    cur = left.get("currency") or right.get("currency") or "SGD"
     if left["price"] < right["price"]:
         cheaper, pricier = left, right
     else:
         cheaper, pricier = right, left
     return (
-        f"{cheaper['name']} is cheaper (¥{cheaper['price']}). "
-        f"{pricier['name']} costs ¥{pricier['price']} and is aimed at: {pricier.get('best_for')}."
+        f"{cheaper['name']} is cheaper ({cur} {cheaper['price']}). "
+        f"{pricier['name']} costs {cur} {pricier['price']} and is aimed at: {pricier.get('best_for')}."
     )
 
 
@@ -166,11 +181,12 @@ def extract_product_query(text: str) -> str | None:
 
 def catalog_to_markdown() -> str:
     """Render catalog as markdown for RAG ingest."""
-    lines = ["# SteelShop Product Catalog", ""]
+    lines = ["# SteelHub Carrier & Packaging Catalog", ""]
     for p in load_products():
+        cur = p.get("currency", "SGD")
         lines.append(f"## {p['name']} ({p['sku']})")
         lines.append(f"Category: {p['category']} · Compare group: {p['compare_group']}")
-        lines.append(f"Price: ¥{p['price']} {p.get('currency', 'CNY')}")
+        lines.append(f"Price: {cur} {p['price']}")
         lines.append(p.get("summary", ""))
         lines.append("Highlights: " + "; ".join(p.get("highlights") or []))
         specs = p.get("specs") or {}
@@ -178,7 +194,6 @@ def catalog_to_markdown() -> str:
             lines.append("Specs: " + ", ".join(f"{k}={v}" for k, v in specs.items()))
         lines.append(f"Best for: {p.get('best_for', '')}")
         lines.append(f"Compatibility: {p.get('compatibility', '')}")
-        lines.append(f"In the box: {', '.join(p.get('in_box') or [])}")
         lines.append("")
     return "\n".join(lines)
 

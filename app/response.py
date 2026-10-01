@@ -12,12 +12,11 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.llm import get_chat_model, llm_mode, should_use_live_llm
 
 
-GROUNDING_SYSTEM = """You are SteelShop customer support.
-Answer ONLY using the POLICY CONTEXT below. Be concise, friendly, and natural.
+GROUNDING_SYSTEM = """You are SteelHub Logistics Care, a Singapore 3PL / warehouse customer-support agent.
+Answer ONLY using the POLICY CONTEXT below. Be concise, professional, and use SGD / SGT when relevant.
 Do NOT mention retrieval scores, chunk ids, vector stores, agents, MCP, or RAG.
-Do NOT invent order/payment/product facts that are not in the context.
-If the context does not contain the answer, say you don't have that in the help docs and suggest a related topic.
-Do NOT add marketing fluff or unrelated offers.
+Do NOT invent shipment/SKU/amount facts that are not in the context.
+If the context does not contain the answer, say you don't have that in the ops docs and suggest tracking, inbound SLA, carriers, or claims.
 Keep the reply under 120 words."""
 
 
@@ -31,8 +30,8 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
     """RAG generate step: grounded answer without exposing scores."""
     if not hits:
         return (
-            "I couldn't find that in our help docs. "
-            "I can help with orders, payments, shipping, returns, or invoices — "
+            "I couldn't find that in our ops docs. "
+            "I can help with inbound SLA, carriers, shipments (SHP-xxxx), inventory, claims — "
             "or say \"talk to a human\" to escalate."
         )
 
@@ -58,8 +57,9 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
                 f"({type(exc).__name__}). Check the API key in Ops, or clear it to use offline replies."
             )
 
-    # Offline mock: turn top substantial chunk into a short spoken answer
-    body = ""
+    # Offline mock: pick the chunk that best matches the question keywords
+    q_tokens = {t for t in re.findall(r"[a-z0-9]+", question.lower()) if len(t) > 2}
+    ranked: list[tuple[int, str]] = []
     for h in hits:
         top = _clean_policy_text(h.get("text", ""))
         lines = [
@@ -67,7 +67,6 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
             for ln in top.splitlines()
             if ln.strip() and not ln.strip().startswith("#")
         ]
-        # Drop short title-only lines
         body_lines = [
             ln
             for ln in lines
@@ -75,15 +74,30 @@ def compose_policy_answer(question: str, hits: list[dict]) -> str:
         ]
         candidate = " ".join(body_lines) if body_lines else " ".join(lines[1:] if len(lines) > 1 else lines)
         candidate = " ".join(candidate.split())
-        if len(candidate) >= 60:
-            body = candidate
-            break
-    if not body:
-        body = " ".join(_clean_policy_text(hits[0].get("text", "")).split())
+        if len(candidate) < 40:
+            continue
+        low = candidate.lower()
+        overlap = sum(1 for t in q_tokens if t in low)
+        # Prefer concrete policy numbers when the user asks about windows / hours / SLA
+        if any(k in question.lower() for k in ("sla", "window", "how long", "hours", "days")):
+            if re.search(r"\b\d+\s*(hour|day|business)", low):
+                overlap += 3
+        # Prefer claim-window source over receiving exception notes
+        if "claim" in question.lower():
+            src = str(h.get("source") or "").lower()
+            if "freight_claim" in src or "claims" in src:
+                overlap += 4
+            if "calendar days" in low or "7 calendar" in low:
+                overlap += 5
+            if "receiving" in low and "2 hour" in low:
+                overlap -= 3
+        ranked.append((overlap, candidate))
+    ranked.sort(key=lambda x: -x[0])
+    body = ranked[0][1] if ranked else " ".join(_clean_policy_text(hits[0].get("text", "")).split())
     if len(body) > 320:
         body = body[:317].rsplit(" ", 1)[0] + "..."
     mode = llm_mode()
-    suffix = "\n\nAnything else I can help with — an order, payment, or return?"
+    suffix = "\n\nAnything else for shipments, inventory, or SLA?"
     if mode == "mock":
         return f"{body}{suffix}"
     return f"{body}{suffix}"
@@ -93,6 +107,7 @@ def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified
     pays = pays or data.get("payments") or []
     tracking = data.get("tracking_no")
     carrier = data.get("carrier")
+    cur = data.get("currency") or "SGD"
     ship = (
         f"{carrier} tracking {tracking}"
         if tracking
@@ -103,13 +118,13 @@ def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified
         p0 = pays[0]
         pay_bit = (
             f" The latest payment {p0['payment_id']} is {p0['status']} "
-            f"(¥{p0['amount']})."
+            f"({p0.get('currency') or cur} {p0['amount']})."
         )
     addr = data.get("shipping_address") or "n/a"
     return (
         f"Here's what I see for {data['order_id']}: "
         f"{data['product']} (x{data.get('quantity', 1)}) for "
-        f"¥{data['amount']} {data.get('currency', 'CNY')}, status {data['status']}. "
+        f"{cur} {data['amount']}, status {data['status']}. "
         f"Shipping: {ship}. "
         f"Address on file: {addr}."
         f"{pay_bit}"
@@ -117,9 +132,10 @@ def compose_order_answer(data: dict, pays: list[dict] | None = None, *, verified
 
 
 def compose_payment_answer(data: dict) -> str:
+    cur = data.get("currency") or "SGD"
     return (
         f"Payment {data['payment_id']} for order {data['order_id']} is "
-        f"{data['status']}. Amount ¥{data['amount']} via {data['method']}. "
+        f"{data['status']}. Amount {cur} {data['amount']} via {data['method']}. "
         f"Reference: {data.get('transaction_ref') or 'n/a'}. "
         f"Paid at: {data.get('paid_at') or 'not completed yet'}."
     )
@@ -182,9 +198,10 @@ def compose_address_answer(result: dict) -> str:
 
 def compose_greeting() -> str:
     return (
-        "Hi! I'm SteelShop support. I can look up policies, product specs, compare items, "
-        "check orders/payments, handle refunds/cancellations, tracking, invoices, and loyalty. "
-        "Try “compare earbuds” or “specs for Ergonomic Chair”. What do you need?"
+        "Hi — SteelHub Logistics Care (Singapore). "
+        "I can look up inbound/outbound SLA, carriers (Ninja Van / SingPost / GrabExpress), "
+        "track SHP-xxxx, check warehouse inventory, claims policy, or escalate to a human. "
+        "What do you need?"
     )
 
 
@@ -272,7 +289,7 @@ def compose_csat_answer(result: dict) -> str:
     score = result["rating"]["score"]
     return (
         f"Thanks — recorded a {score}/5 satisfaction score for this chat. "
-        "We use this to improve SteelShop Care."
+        "We use this to improve SteelHub Logistics Care."
     )
 
 
@@ -348,9 +365,9 @@ def compose_compare_answer(result: dict) -> str:
     )
     return (
         f"Compare{note}:\n"
-        f"• {left['name']} ({left['sku']}) — ¥{left['price']} — {left.get('best_for')}\n"
-        f"• {right['name']} ({right['sku']}) — ¥{right['price']} — {right.get('best_for')}\n"
-        f"Price delta: ¥{result.get('price_diff')}\n"
+        f"• {left['name']} ({left['sku']}) — {left.get('currency', 'SGD')} {left['price']} — {left.get('best_for')}\n"
+        f"• {right['name']} ({right['sku']}) — {right.get('currency', 'SGD')} {right['price']} — {right.get('best_for')}\n"
+        f"Price delta: {left.get('currency', 'SGD')} {result.get('price_diff')}\n"
         f"Specs:\n{table}\n"
         f"{result.get('verdict')}"
     )
@@ -371,8 +388,9 @@ def compose_product_search_answer(result: dict) -> str:
 
 def compose_off_topic() -> str:
     return (
-        "I'm here for SteelShop shopping support — policies, product specs/compare, "
-        "orders, payments, shipping, and returns. Want a product sheet or a policy lookup?"
+        "I'm here for SteelHub warehouse / logistics support in Singapore — "
+        "SLA, carriers, SHP tracking, inventory SKUs, claims, and GST invoice notes. "
+        "Try “inbound SLA” or “track SHP-2001”."
     )
 
 

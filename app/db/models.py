@@ -227,3 +227,35 @@ class ToolIdempotency(Base):
     idem_key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     result_json: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class InventoryLot(Base):
+    """WMS demo stock positions (Singapore DC)."""
+
+    __tablename__ = "inventory_lots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    sku: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    qty_on_hand: Mapped[int] = mapped_column(Integer, default=0)
+    zone: Mapped[str] = mapped_column(String(32), default="A")
+    bin_code: Mapped[str] = mapped_column(String(32), default="A-01")
+    uom: Mapped[str] = mapped_column(String(16), default="EA")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UploadedDocument(Base):
+    """User-uploaded PDF/MD/TXT for RAG ingest."""
+
+    __tablename__ = "uploaded_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    doc_id: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    filename: Mapped[str] = mapped_column(String(256))
+    mime: Mapped[str] = mapped_column(String(64), default="text/plain")
+    stored_path: Mapped[str] = mapped_column(String(512))
+    bytes_size: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="stored")  # stored | ingested | error
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 8000
-    company_name: str = "SteelShop"
+    company_name: str = "SteelHub Logistics"
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
     langchain_project: str = "cs-smart-bot"
@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     @property
     def policies_dir(self) -> Path:
         return DATA_DIR / "policies"
+
+    @property
+    def uploads_dir(self) -> Path:
+        path = DATA_DIR / "uploads"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     @property
     def vector_dir(self) -> Path:
