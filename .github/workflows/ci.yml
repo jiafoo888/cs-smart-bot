@@ -1,0 +1,37 @@
+# CI for SteelHub Logistics Care (see docs/MVP.md §7 / C10)
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      USE_MOCK_LLM: "true"
+      EMBEDDING_BACKEND: hash
+      VECTOR_STORE: simple
+      COMPANY_NAME: "SteelHub Logistics"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-prod.txt
+
+      - name: Bootstrap DB + RAG
+        run: python -m app.bootstrap
+
+      - name: Functional tests
+        run: python test.py
