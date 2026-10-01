@@ -20,12 +20,16 @@ Follow this order when you rebuild from scratch:
 
 ## B. CI/CD (MVP C10)
 
-GitHub Actions (`.github/workflows/ci.yml`):
+GitHub Actions file: `.github/workflows/ci.yml` (kept in the repo locally).
 
 - Trigger: push / PR to `main`
-- Install `requirements-prod.txt`
-- `python -m app.bootstrap`
-- `python test.py`
+- Install `requirements-prod.txt` → `python -m app.bootstrap` → `python test.py`
+
+**Note:** Pushing `.github/workflows/*` requires a GitHub token with the `workflow` scope.
+If `git push` is rejected for that reason, push the app first, then either:
+
+1. Create a PAT with `workflow` + `repo`, or  
+2. Add the workflow in the GitHub UI (Actions → New workflow).
 
 Local same path:
 
