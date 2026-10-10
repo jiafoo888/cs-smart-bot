@@ -60,4 +60,4 @@
 
 - 上一 session：`0892b97b` clarify-ui-deploy-upload
 - 相关 MVP：C8、C11、C12、§3.2 demo scripts 7–8
-- 相关 commit：push 后回填
+- 相关 commit：`80e0380`
