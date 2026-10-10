@@ -65,4 +65,4 @@
 
 - 上一 session：`f1481266` product-priorities-openai-rag-render
 - 相关 MVP 章节：§4.2 Clarification、§7 Deploy、Changelog 1.2
-- 相关 PR / commit：本轮 push 后回填 hash
+- 相关 PR / commit：`1a27296`（合并入 `main` 后触发 Render）
