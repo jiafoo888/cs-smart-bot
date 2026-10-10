@@ -477,7 +477,13 @@ def execute_pending(session_id: str, pending: dict) -> dict:
         return {**cached, "idempotent": True}
 
     if action == "refund":
-        result = apply_refund(oid, payload.get("reason", "customer_request"))
+        # Product rule: chat never moves money. Staff must complete refunds.
+        clear_pending(session_id)
+        result = {
+            "ok": False,
+            "error": "Chat refunds are disabled; open a refund_approval ticket for a specialist.",
+            "staff_only": True,
+        }
     elif action == "cancel":
         result = cancel_order(oid, payload.get("reason", "customer_request"))
     elif action == "address":

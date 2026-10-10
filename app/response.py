@@ -151,27 +151,72 @@ def compose_payments_list(order_id: str, pays: list[dict]) -> str:
 
 
 def compose_refund_answer(result: dict, policy_hits: list[dict]) -> str:
+    """Legacy composer kept for tools/tests; chat bot no longer executes refunds."""
     if not result.get("ok"):
         return (
             f"I couldn't process that refund: {result.get('error')}. "
-            "If the order isn't shipped yet, we usually cancel instead of refunding. "
-            "Share the order id if you'd like me to check again."
+            "Refunds must be completed by a human specialist. "
+            "I can check payment status or open a staff review ticket."
         )
     o = result["order"]
     p = result.get("payment")
-    timing = ""
-    for h in policy_hits[:2]:
-        text = (h.get("text") or "").lower()
-        if "1–3" in text or "1-3" in text or "business day" in text:
-            timing = " Wallet refunds usually land in 1–3 business days; cards may take 3–7."
-            break
     pay_line = (
         f" Payment {p['payment_id']} is now marked {p['status']}." if p else ""
     )
     return (
-        f"I've submitted the refund for {o['order_id']} (¥{o['amount']}). "
-        f"Order status is now {o['status']}.{pay_line}{timing} "
-        "You'll see it on the original payment method."
+        f"Refund recorded for {o['order_id']} (SGD {o['amount']}). "
+        f"Order status is {o['status']}.{pay_line}"
+    )
+
+
+def compose_refund_status(order: dict, pays: list[dict], open_tickets: list[dict] | None = None) -> str:
+    oid = order.get("order_id") or "that shipment"
+    ostatus = (order.get("status") or "unknown").lower()
+    cur = order.get("currency") or "SGD"
+    pay_bits = []
+    for p in pays or []:
+        pay_bits.append(
+            f"{p.get('payment_id')}: {p.get('status')} ({cur} {p.get('amount')})"
+        )
+    pay_line = "; ".join(pay_bits) if pay_bits else "no payment rows on file"
+
+    if ostatus == "refunded" or any((p.get("status") or "").lower() == "refunded" for p in pays or []):
+        return (
+            f"Refund status for {oid}: **completed / refunded**. "
+            f"Payments — {pay_line}. "
+            "If the funds are not visible yet, card rails can take 3–7 business days."
+        )
+
+    tickets = open_tickets or []
+    if tickets:
+        tids = ", ".join(t.get("ticket_id") or "?" for t in tickets[:3])
+        return (
+            f"Refund status for {oid}: **pending staff review** ({tids}). "
+            f"Shipment is {ostatus}. Payments — {pay_line}. "
+            "A specialist will finish approval; the bot cannot push money back itself."
+        )
+
+    if any((p.get("status") or "").lower() == "pending" for p in pays or []):
+        return (
+            f"For {oid}, I see a **pending** payment (not a completed refund yet). "
+            f"Shipment is {ostatus}. Payments — {pay_line}. "
+            "Say “request refund review” if you want staff to open a ticket."
+        )
+
+    return (
+        f"Refund status for {oid}: **no refund posted yet**. "
+        f"Shipment is {ostatus}. Payments — {pay_line}. "
+        "I can look up status anytime. To start a refund, I must hand this to a human "
+        "(say “request refund review” or escalate) — I won’t refund from chat."
+    )
+
+
+def compose_refund_staff_handoff(ticket_id: str, order_id: str, amount: float | None = None) -> str:
+    amt = f" (SGD {amount})" if amount is not None else ""
+    return (
+        f"I can’t refund {order_id}{amt} from chat — money movement needs a human specialist. "
+        f"I’ve opened ticket {ticket_id} so staff can review and process it, and paused the bot here. "
+        "Meanwhile you can still ask about payment/refund **status** after an agent resumes the bot."
     )
 
 
@@ -409,7 +454,8 @@ def compose_verify_ok(ident: dict) -> str:
     extra = " VIP routing is on." if tier == "vip" else ""
     return (
         f"Verified — thanks, {name} ({tier} tier).{extra} "
-        "I can now show full order details and take actions like refund, cancel, or address change."
+        "I can now show full order details and help with cancel/address flows. "
+        "Refunds still require a human specialist — I only report status or open a review ticket."
     )
 
 

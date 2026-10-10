@@ -141,9 +141,39 @@ function updateContext(data) {
   setText("ctxPending", data.pending_action || "—");
 }
 
+const HUBBIT_TIPS = [
+  "Hi — I’m Hubbit. Ask SLA, track SHP, or check refund status.",
+  "Refunds need a human — I only report pending / done.",
+  "Try “Track SHP-2001” or “Inbound SLA”.",
+  "Ambiguous parcel asks? I’ll clarify for the SHP id.",
+  "Staff review tickets keep money moves off the bot.",
+];
+let hubbitTipIdx = 0;
+
+function nudgeHubbit(agent) {
+  const card = el("mascotCard");
+  const bubble = el("mascotBubble");
+  if (card) {
+    card.classList.remove("wave");
+    void card.offsetWidth;
+    card.classList.add("wave");
+  }
+  if (bubble) {
+    if (agent === "refund") {
+      bubble.textContent = "Refunds → staff ticket. Status checks are OK here.";
+    } else if (agent === "escalate" || agent === "handoff") {
+      bubble.textContent = "I’ve waved a human over. Hang tight.";
+    } else {
+      hubbitTipIdx = (hubbitTipIdx + 1) % HUBBIT_TIPS.length;
+      bubble.textContent = HUBBIT_TIPS[hubbitTipIdx];
+    }
+  }
+}
+
 async function sendChat(message) {
   const include_debug = Boolean(el("debugToggle")?.checked);
   addMessage("user", message);
+  nudgeHubbit();
   const input = el("messageInput");
   if (input) input.value = "";
   const typing = addMessage("bot", "", { typing: true });
@@ -172,6 +202,7 @@ async function sendChat(message) {
     });
     updateContext(data);
     setPipeline(data.agent);
+    nudgeHubbit(data.agent);
     refreshByokUi(data.llm_mode);
     if (include_debug) setText("opsDebug", JSON.stringify(data.debug || {}, null, 2));
     // Refresh side panels without failing the chat if one panel is missing

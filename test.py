@@ -116,10 +116,16 @@ CASES = [
         "must_include": ["PAY-9003", "pending"],
     },
     {
-        "name": "refund_flow",
+        "name": "refund_staff_handoff",
         "input": "Please refund SHP-2002",
         "expect_agent": "refund",
-        "must_include": ["YES"],
+        "must_include": ["ticket", "specialist"],
+    },
+    {
+        "name": "refund_status_query",
+        "input": "Is the refund for SHP-2002 pending or done?",
+        "expect_agent": "refund",
+        "must_include": ["SHP-2002", "refund"],
     },
     {
         "name": "escalate",

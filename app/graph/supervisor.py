@@ -15,7 +15,7 @@ from app.db.enterprise_ops import (
     pause_bot_for_human,
     save_satisfaction,
 )
-from app.db.repository import append_chat_log, create_ticket, lookup_order
+from app.db.repository import append_chat_log, create_ticket, list_tickets, lookup_order
 from app.mcp_bridge import call_mcp_tool
 from app.rag.retriever import retrieve_faq, sources_for_ui
 from app.catalog import extract_product_query
@@ -51,6 +51,8 @@ from app.response import (
     compose_payment_answer,
     compose_payments_list,
     compose_pending_reminder,
+    compose_refund_staff_handoff,
+    compose_refund_status,
     compose_policy_answer,
     compose_product_answer,
     compose_product_search_answer,
@@ -711,16 +713,97 @@ async def payment_agent(state: CSState) -> dict:
     }
 
 
+def _is_refund_status_ask(text: str) -> bool:
+    t = text.lower()
+    return any(
+        k in t
+        for k in (
+            "refund status",
+            "status of the refund",
+            "status of my refund",
+            "is the refund",
+            "has my refund",
+            "did my refund",
+            "refund pending",
+            "pending or done",
+            "pending or successful",
+            "was refunded",
+            "got my refund",
+            "receive the refund",
+            "check refund",
+        )
+    ) or (
+        "refund" in t
+        and any(k in t for k in ("status", "pending", "succeeded", "successful", "done", "complete"))
+    )
+
+
 async def refund_agent(state: CSState) -> dict:
+    """Refunds are staff-only: bot may report status or open a review ticket — never pay out."""
     text = _last_user_text(state)
-    oid = extract_order_id(text) or (state.get("order_id") if is_follow_up(text.lower()) else None)
+    t = text.lower()
+    oid = extract_order_id(text) or (state.get("order_id") if is_follow_up(t) else None)
+    sid = state.get("session_id") or "unknown"
+
+    if _is_refund_status_ask(text):
+        if not oid:
+            return _finish(
+                "I can check refund/payment status — send the shipment id (e.g. SHP-2002) "
+                "or a payment id like PAY-9003.",
+                "refund",
+            )
+        bind_order(sid, oid)
+        order = lookup_order(oid)
+        if not order:
+            return _finish(
+                f"I couldn’t find {oid}. Double-check the shipment id and try again.",
+                "refund",
+                order_id=oid,
+            )
+        pay_raw = await call_mcp_tool("get_order_payments", {"order_id": oid})
+        pays = json.loads(pay_raw).get("payments") or []
+        open_tickets = [
+            tkt
+            for tkt in list_tickets()
+            if (tkt.get("order_id") == oid)
+            and (tkt.get("category") in {"refund", "refund_approval"})
+            and (tkt.get("status") or "").lower() in {"open", "pending_ops", "pending_customer"}
+        ]
+        return _finish(
+            compose_refund_status(order, pays, open_tickets),
+            "refund",
+            order_id=oid,
+            debug={"refund_mode": "status", "payments": pays, "tickets": open_tickets},
+        )
+
     if not oid:
         return _finish(
-            "I can start a refund — please send the order id (for example ORD-1002).",
+            "Refunds can’t be paid out from chat. Share a shipment id (e.g. SHP-2002) and I’ll "
+            "open a **staff review ticket**, or ask me for refund/payment **status** anytime.",
             "refund",
         )
-    return _gate_mutation(
-        state, "refund", oid, {"reason": "customer_request_via_bot"}, "refund"
+
+    bind_order(sid, oid)
+    order = lookup_order(oid)
+    if not order:
+        return _finish(
+            f"I couldn’t find {oid}. Double-check the shipment id and try again.",
+            "refund",
+            order_id=oid,
+        )
+    amount = float(order.get("amount") or 0)
+    ticket = create_ticket(
+        session_id=sid,
+        summary=f"Refund review requested for {oid} (SGD {amount})",
+        category="refund_approval",
+        order_id=oid,
+    )
+    pause_bot_for_human(sid, ticket_id=ticket["ticket_id"])
+    return _finish(
+        compose_refund_staff_handoff(ticket["ticket_id"], oid, amount),
+        "refund",
+        order_id=oid,
+        debug={"refund_mode": "staff_handoff", "ticket": ticket, "bot_paused": True},
     )
 
 
@@ -888,7 +971,8 @@ async def _chat_inner(session_id: str, message: str) -> dict:
 
     if pending:
         if is_confirm(message):
-            if pending.get("requires_approval"):
+            # Refunds are never executed from chat (even if an old pending row exists).
+            if pending.get("action") == "refund" or pending.get("requires_approval"):
                 ticket = create_ticket(
                     session_id=session_id,
                     summary=f"{pending['action']} approval for {pending['order_id']} (SGD {pending['amount']})",
@@ -898,19 +982,24 @@ async def _chat_inner(session_id: str, message: str) -> dict:
                 )
                 pause_bot_for_human(session_id, ticket_id=ticket["ticket_id"])
                 clear_pending(session_id)
-                reply = compose_approval_hold(ticket, pending)
+                if pending.get("action") == "refund":
+                    reply = compose_refund_staff_handoff(
+                        ticket["ticket_id"],
+                        pending.get("order_id") or "",
+                        pending.get("amount"),
+                    )
+                else:
+                    reply = compose_approval_hold(ticket, pending)
                 return _pack(
                     reply,
-                    "escalate",
+                    "escalate" if pending.get("action") != "refund" else "refund",
                     order_id=pending.get("order_id"),
                     bot_paused=True,
-                    debug={"ticket": ticket, "pending": pending},
+                    debug={"ticket": ticket, "pending": pending, "refund_chat_blocked": True},
                 )
             result = execute_pending(session_id, pending)
-            policy_hits = retrieve_faq("refund timeline return policy") if pending["action"] == "refund" else []
-            if pending["action"] == "refund":
-                reply = compose_refund_answer(result, policy_hits)
-            elif pending["action"] == "cancel":
+            policy_hits: list[dict] = []
+            if pending["action"] == "cancel":
                 reply = compose_cancel_answer(result)
             else:
                 reply = compose_address_answer(result)
