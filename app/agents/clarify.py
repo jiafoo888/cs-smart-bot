@@ -7,6 +7,31 @@ from dataclasses import dataclass, field
 
 _SESSION: dict[str, "ClarifyState"] = {}
 
+# Strong pivots: user abandoned slot-filling for a different desk task.
+_PIVOT_MARKERS = (
+    "inbound sla",
+    "outbound cut",
+    "cut-off",
+    "cutoff",
+    "gst",
+    "compare",
+    "ninja van",
+    "singpost",
+    "grabexpress",
+    "escalate",
+    "complaint",
+    "human",
+    "refund",
+    "payment",
+    "freight claims",
+    "claims window",
+    "inventory lookup",
+    "what is stock",
+    "use tools",
+    "policy",
+    "invoice notes",
+)
+
 
 @dataclass
 class ClarifyState:
@@ -40,6 +65,49 @@ def extract_sku(text: str) -> str | None:
         return m.group(0)
     m = re.search(r"\b([A-Z]{2,6}-\d{3,5})\b", text.upper())
     return m.group(1) if m else None
+
+
+def _looks_like_slot_answer(text: str, existing: ClarifyState) -> bool:
+    """True when the user is answering the pending clarify prompt."""
+    if existing.intent == "track_shipment" and extract_shipment_id(text):
+        return True
+    if existing.intent == "inventory_lookup" and extract_sku(text):
+        return True
+    if existing.intent == "freight_claim":
+        if "shipment_id" in existing.missing and extract_shipment_id(text):
+            return True
+        if "description" in existing.missing and len(text.strip().split()) >= 3:
+            return True
+    # Bare short replies while clarifying (e.g. "SHP-2001" already handled; "2001")
+    words = text.strip().split()
+    if len(words) <= 3 and not any(m in text.lower() for m in _PIVOT_MARKERS):
+        return True
+    return False
+
+
+def should_abandon_clarify(text: str, existing: ClarifyState) -> bool:
+    """
+    Drop pending clarify when the user pivots to a different clear intent.
+    Keeps C4 slot-filling for genuine follow-ups (ids / short answers).
+    """
+    if _looks_like_slot_answer(text, existing):
+        return False
+
+    t = text.lower()
+    if any(m in t for m in _PIVOT_MARKERS):
+        return True
+
+    need = needs_clarification(text)
+    if need and need.intent and need.intent != existing.intent:
+        return True
+
+    # Full question or long new ask without the missing slot → pivot
+    words = text.strip().split()
+    if "?" in text and len(words) >= 4:
+        return True
+    if len(words) >= 6:
+        return True
+    return False
 
 
 def needs_clarification(text: str) -> ClarifyState | None:

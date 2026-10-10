@@ -7,6 +7,7 @@ from app.agents.clarify import (
     get_clarify,
     needs_clarification,
     set_clarify,
+    should_abandon_clarify,
 )
 from app.agents.consistency import evidence_from_hits, evidence_from_tool, verify_draft
 
@@ -17,6 +18,7 @@ __all__ = [
     "get_clarify",
     "needs_clarification",
     "set_clarify",
+    "should_abandon_clarify",
     "evidence_from_hits",
     "evidence_from_tool",
     "verify_draft",

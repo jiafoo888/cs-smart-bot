@@ -84,15 +84,7 @@ function scrollChat() {
 }
 
 function setPipeline(agent) {
-  document.querySelectorAll("#pipeline li").forEach((li) => {
-    const node = li.dataset.node;
-    const on =
-      node === "supervisor" ||
-      node === agent ||
-      (agent === "csat" && node === "smalltalk") ||
-      (agent === "product" && node === "product");
-    li.classList.toggle("active", on);
-  });
+  // Left-rail Route list removed; only update the stage route pill
   const pill = el("routePill");
   if (pill) {
     pill.textContent = agent || "router";

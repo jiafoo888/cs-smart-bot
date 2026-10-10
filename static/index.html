@@ -6,8 +6,8 @@
   <title>SteelHub Logistics Care</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20261001-logistics" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261010-daylight" />
 </head>
 <body>
   <header class="topbar">
@@ -15,7 +15,7 @@
       <div class="logo-mark" aria-hidden="true"></div>
       <div>
         <p class="brand">SteelHub Logistics Care</p>
-        <p class="brand-sub">Singapore 3PL / warehouse desk</p>
+        <p class="brand-sub">Jurong desk · Singapore 3PL</p>
       </div>
     </div>
     <div class="top-metrics" id="topMetrics">
@@ -43,35 +43,24 @@
       </section>
 
       <section class="rail-section">
-        <h2>Route</h2>
-        <ol class="pipeline" id="pipeline">
-          <li data-node="supervisor">Router</li>
-          <li data-node="clarify">Clarify</li>
-          <li data-node="smalltalk">Greeting</li>
-          <li data-node="faq">Policy RAG</li>
-          <li data-node="product">Carriers</li>
-          <li data-node="order">Shipments</li>
-          <li data-node="inventory">Inventory</li>
-          <li data-node="react">ReAct</li>
-          <li data-node="payment">Payments</li>
-          <li data-node="refund">Claims/Refund</li>
-          <li data-node="escalate">Human</li>
-          <li data-node="handoff">Paused</li>
-        </ol>
-      </section>
-
-      <section class="rail-section">
         <h2>Try</h2>
         <div class="chips" id="quickIntents">
           <button type="button" data-q="What is your inbound SLA in Singapore?">Inbound SLA</button>
-          <button type="button" data-q="Compare Ninja Van vs SingPost for last-mile">Carriers</button>
+          <button type="button" data-q="What is the outbound cut-off at Jurong West DC?">Outbound cut-off</button>
+          <button type="button" data-q="Compare Ninja Van vs SingPost for last-mile">Ninja vs SingPost</button>
+          <button type="button" data-q="When should I use GrabExpress?">GrabExpress</button>
           <button type="button" data-q="Track SHP-2001">Track SHP-2001</button>
+          <button type="button" data-q="Show tracking timeline for SHP-2001">Tracking timeline</button>
           <button type="button" data-q="Where is my parcel?">Ambiguous track</button>
+          <button type="button" data-q="Check shipment SHP-2003">SHP-2003 status</button>
           <button type="button" data-q="Inventory lookup for SKU-PALLET-WRAP">Inventory SKU</button>
-          <button type="button" data-q="What is the freight claims window?">Claims policy</button>
+          <button type="button" data-q="What is stock for SKU-CARTON-M?">Carton stock</button>
+          <button type="button" data-q="What is the freight claims window?">Claims window</button>
           <button type="button" data-q="GST invoice notes for Singapore">GST notes</button>
+          <button type="button" data-q="What is the payment status of PAY-9003?">Payment PAY-9003</button>
+          <button type="button" data-q="Please refund SHP-2002">Refund SHP-2002</button>
           <button type="button" data-q="Use tools to track SHP-2001 and also check outbound cut-off">ReAct multi-tool</button>
-          <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate</button>
+          <button type="button" data-q="I want to file a complaint, escalate to a human">Escalate to human</button>
         </div>
       </section>
     </aside>
@@ -79,8 +68,8 @@
     <section class="stage">
       <div class="stage-head">
         <div>
-          <h1>Thread</h1>
-          <p class="muted" id="threadHint">Ask SLA, track SHP-xxxx, inventory, or upload an SOP in Ops</p>
+          <h1>Desk thread</h1>
+          <p class="muted" id="threadHint">SLA · SHP tracking · inventory · upload SOP in Ops</p>
         </div>
         <div class="route-pill" id="routePill">router</div>
       </div>
@@ -227,6 +216,6 @@
     </aside>
   </main>
 
-  <script src="/static/app.js?v=20261001-logistics"></script>
+  <script src="/static/app.js?v=20261010-daylight"></script>
 </body>
 </html>

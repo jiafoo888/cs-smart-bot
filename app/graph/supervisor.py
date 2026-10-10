@@ -27,6 +27,7 @@ from app.agents.clarify import (
     get_clarify,
     needs_clarification,
     set_clarify,
+    should_abandon_clarify,
 )
 from app.agents.consistency import evidence_from_hits, evidence_from_tool, verify_draft
 from app.agents.react_agent import run_react
@@ -925,9 +926,13 @@ async def _chat_inner(session_id: str, message: str) -> dict:
             return _pack(compose_denied_mutation(), "order", order_id=pending.get("order_id"))
         return _pack(compose_pending_reminder(pending), "order", order_id=pending.get("order_id"))
 
-    # Clarification loop (MVP C4) — ask until slots filled, max 2 turns
+    # Clarification loop (MVP C4) — ask until slots filled, max 2 turns.
+    # Intent pivot clears sticky clarify so policy / escalate / compare still work.
     existing = get_clarify(session_id)
     working_message = message
+    if existing and should_abandon_clarify(message, existing):
+        clear_clarify(session_id)
+        existing = None
     if existing:
         filled = apply_user_fill(session_id, message, existing)
         if isinstance(filled, ClarifyState):

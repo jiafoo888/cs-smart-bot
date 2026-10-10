@@ -2,8 +2,10 @@
 
 > **权威文档**：本文件是本仓库唯一产品与技术 MVP 规格。  
 > **规则**：任何 plan、代码修改、UI、部署、CI 变更都必须对齐本文件；冲突时以本文件为准并先更新本文件再改代码。  
-> **版本**：MVP-1.0 · Singapore logistics / warehouse CS agent  
-> **Live demo**：`https://cs-smart-bot.onrender.com`（Render 服务名保持既有部署）
+> **版本**：MVP-1.2 · Singapore logistics / warehouse CS agent  
+> **Live demo**：`https://cs-smart-bot.onrender.com`（Render 服务名保持既有部署）  
+> **产品优先级锁定**（2026-10-10 / collab `f1481266`）：生产默认 OpenAI；RAG 优先政策问答准确；上传 PDF/文档保留；部署继续 Render 单容器。  
+> **Changelog 1.2**（collab `0892b97b`）：C4 clarify 意图解绑；控制台明亮化（非 AI 样板）；协作记录强制 `docs/collab/`；DEPLOY 品牌统一 SteelHub。
 
 ---
 
@@ -43,8 +45,16 @@
 | C6 | Document upload ingest | User uploads `.pdf` / `.md` / `.txt` → chunk → embed → Chroma → searchable |
 | C7 | Shipment / warehouse demo data | Seeded SG shipments, WMS locations, exceptions |
 | C8 | Human handoff + SLA tickets | Pause bot, ticket with priority/SLA |
-| C9 | BYOK OpenAI (optional) | Session key for live policy wording only; never stored in DB |
+| C9 | Server OpenAI (default) + optional BYOK | Production: `USE_MOCK_LLM=false` + server `OPENAI_API_KEY`. BYOK still allowed per-request override; never stored in DB. CI/local tests may keep mock. |
 | C10 | CI/CD | GitHub Actions: lint/tests on PR/push; Render auto-deploy from `main` |
+
+### 2.1 Locked product priorities (PM + BE)
+
+| Decision | Choice | Backend implication |
+|----------|--------|---------------------|
+| LLM | **Production default = OpenAI** | Render env: `USE_MOCK_LLM=false` + secret `OPENAI_API_KEY`. No key → `/health` reports degraded; chat returns clear config error (no silent mock in prod). CI/dev may still use mock. |
+| RAG focus | **Policy Q&A accuracy first**; upload PDF/MD/TXT remains required | Split chunk knobs: policy vs upload. Tune policy chunk/overlap/top_k/min_score first; upload keeps usable defaults. |
+| Deploy | **Render single Docker container** (primary) | Keep `Dockerfile` + `render.yaml`; local `docker compose` is secondary for smoke tests. Free-tier may keep `VECTOR_STORE=simple` / `EMBEDDING_BACKEND=hash` unless memory allows chroma/st. |
 
 ---
 
@@ -117,6 +127,8 @@ Ambiguous intents that **must** clarify before tools:
 
 Max **2** clarifying turns, then best-effort or escalate.
 
+**Intent abandon (sticky-session fix):** if a clarify loop is open and the next user message is a **clear pivot** (policy / carrier compare / escalate / payment / refund / complete tool ask), **clear** the pending clarify state and route normally. Do **not** keep asking for SHP id. Genuine slot fills (e.g. reply `SHP-2001`) still complete the loop.
+
 ### 4.3 Consistency verifier
 After policy or tool-backed reply draft:
 1. Collect evidence: top RAG chunks and/or tool JSON  
@@ -136,11 +148,19 @@ After policy or tool-backed reply draft:
 ### 5.2 Pipeline
 1. Save raw file  
 2. Extract text (pdf via `pypdf`; md/txt utf-8)  
-3. Section-aware / recursive chunk  
-4. Upsert into Chroma with metadata `{source, category: "upload", filename}`  
+3. Section-aware / recursive chunk (**upload** knobs, separate from policy)  
+4. Upsert into vector store with metadata `{source, category: "upload", filename}`  
 5. Return chunk count  
 
-### 5.3 UI
+### 5.3 Chunk strategy (policy vs upload)
+| Corpus | Default knobs (tunable via env) | Rationale |
+|--------|----------------------------------|-----------|
+| Policy (`data/policies/`, faq) | Prefer slightly larger chunks that keep H2 sections intact; higher priority in retrieval boost when `category != upload` | User-facing policy answers must be accurate and citeable |
+| Upload (PDF/MD/TXT) | Slightly smaller chunks / modest overlap | Long SOPs; recall over perfect phrasing |
+
+Shared: section-aware split before recursive splitter; embeddings backend unchanged by corpus type.
+
+### 5.4 UI
 Ops tab: upload control + list + Re-ingest button.
 
 ---
@@ -164,10 +184,10 @@ Ops tab: upload control + list + Re-ingest button.
 
 | Area | MVP bar |
 |------|---------|
-| Deploy | Docker on Render free; health `/health` |
-| Config | `VECTOR_STORE=chroma` preferred; fallback `simple` only if chroma install fails on free tier |
-| Secrets | BYOK in request body only; server `OPENAI_API_KEY` optional |
-| Tests | `test.py` functional routes + RAG smoke + upload ingest smoke |
+| Deploy | Docker on Render free (primary); health `/health`; local compose secondary |
+| Config | `VECTOR_STORE=chroma` preferred locally; Render free may use `simple` if chroma OOM |
+| Secrets | Production **requires** server `OPENAI_API_KEY`; BYOK optional override in request body only |
+| Tests | `test.py` functional routes + RAG smoke + upload ingest smoke (mock LLM in CI) |
 | CI | `.github/workflows/ci.yml` — install, bootstrap, `test.py` |
 
 ---
@@ -201,6 +221,7 @@ render.yaml
 | P4 | ReAct agent path + Chroma default in config/Docker | `/health` shows chroma when available |
 | P5 | CI workflow + learning docs | CI green; tutorials readable |
 | P6 | Push `main` → Render redeploy | Live URL serves new console |
+| P7 | Prod OpenAI default + policy/upload chunk split | Render uses real LLM with key; policy answers measurably better on demo scripts 1/3; upload still works |
 
 ---
 

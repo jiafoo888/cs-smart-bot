@@ -64,6 +64,27 @@ CASES = [
         "must_include": ["SHP"],
     },
     {
+        "name": "clarify_then_fill",
+        "setup": ["Where is my parcel?"],
+        "input": "SHP-2001",
+        "expect_agent": "order",
+        "must_include": ["SHP-2001"],
+    },
+    {
+        "name": "clarify_then_pivot_carrier",
+        "setup": ["Where is my parcel?"],
+        "input": "Compare Ninja Van vs SingPost for last-mile",
+        "expect_agent": "product",
+        "must_include": ["Ninja"],
+    },
+    {
+        "name": "clarify_then_pivot_escalate",
+        "setup": ["Where is my parcel?"],
+        "input": "I want to file a complaint, escalate to a human",
+        "expect_agent": "escalate",
+        "must_include": ["ticket"],
+    },
+    {
         "name": "shipment_lookup",
         "input": "Track SHP-2001",
         "expect_agent": "order",

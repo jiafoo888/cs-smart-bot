@@ -9,8 +9,12 @@ services:
     dockerContext: .
     dockerfilePath: ./Dockerfile
     envVars:
+      # Free demo defaults to mock. For company trial: set OPENAI_API_KEY in
+      # Render Dashboard and flip USE_MOCK_LLM=false (see DEPLOY.md §C).
       - key: USE_MOCK_LLM
         value: "true"
+      - key: OPENAI_API_KEY
+        sync: false
       - key: EMBEDDING_BACKEND
         value: hash
       - key: VECTOR_STORE
