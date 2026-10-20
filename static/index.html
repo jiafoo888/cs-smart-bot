@@ -6,16 +6,38 @@
   <title>SteelHub Logistics Care</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/styles.css?v=20261010-hubbit" />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css?v=20261020-hud" />
 </head>
 <body>
+  <div class="site-bg" aria-hidden="true">
+    <div class="site-bg__grid"></div>
+    <div class="site-bg__topo"></div>
+    <div class="site-bg__glow"></div>
+    <div class="site-bg__scan"></div>
+  </div>
+  <div class="hud-beam" aria-hidden="true"></div>
+  <div class="cursor-dot" id="cursorDot" aria-hidden="true"></div>
+  <div class="cursor-ring" id="cursorRing" aria-hidden="true"></div>
+
+  <div class="preloader" id="preloader">
+    <div class="preloader__grid"></div>
+    <div class="preloader__beam"></div>
+    <div class="preloader__copy">
+      <span class="preloader__label">SH // BOOT SEQUENCE</span>
+      <span class="preloader__pct" id="bootPct">0%</span>
+      <span class="preloader__status" id="bootStatus">MOUNTING SYSTEMS.</span>
+      <div class="preloader__bar"><i id="bootBar"></i></div>
+    </div>
+  </div>
+
+  <div class="console">
   <header class="topbar">
     <div class="brand-block">
       <div class="logo-mark" aria-hidden="true"></div>
       <div>
         <p class="brand">SteelHub Logistics Care</p>
-        <p class="brand-sub">Jurong desk · Singapore 3PL</p>
+        <p class="brand-sub">Singapore · 3PL desk</p>
       </div>
     </div>
     <div class="top-metrics" id="topMetrics">
@@ -52,7 +74,7 @@
       </section>
 
       <section class="rail-section">
-        <h2>Conversation</h2>
+        <h2>01 · Conversation</h2>
         <div class="session active" id="sessionCard">
           <strong>Web chat</strong>
           <span id="sessionLabel">care-demo-1</span>
@@ -60,7 +82,7 @@
       </section>
 
       <section class="rail-section">
-        <h2>Try</h2>
+        <h2>02 · Try</h2>
         <div class="chips" id="quickIntents">
           <button type="button" data-q="What is your inbound SLA in Singapore?">Inbound SLA</button>
           <button type="button" data-q="What is the outbound cut-off at Jurong West DC?">Outbound cut-off</button>
@@ -84,10 +106,23 @@
     </aside>
 
     <section class="stage">
+      <div class="wire-orb" aria-hidden="true">
+        <svg viewBox="0 0 400 400" fill="none">
+          <ellipse cx="200" cy="200" rx="150" ry="150" stroke="#e8ff3d" stroke-opacity="0.35" />
+          <ellipse cx="200" cy="200" rx="150" ry="52" stroke="#e8ff3d" stroke-opacity="0.45" />
+          <ellipse cx="200" cy="200" rx="150" ry="52" stroke="#e8ff3d" stroke-opacity="0.25" transform="rotate(35 200 200)" />
+          <ellipse cx="200" cy="200" rx="150" ry="52" stroke="#e8ff3d" stroke-opacity="0.2" transform="rotate(-40 200 200)" />
+          <circle cx="200" cy="200" r="4" fill="#e8ff3d" />
+          <g stroke="#e8ff3d" stroke-opacity="0.28" stroke-width="0.8">
+            <path d="M200 50 L230 110 L280 140 L250 200 L280 260 L230 290 L200 350 L170 290 L120 260 L150 200 L120 140 L170 110 Z" />
+            <path d="M110 160 L200 120 L290 160 L270 250 L200 290 L130 250 Z" />
+          </g>
+        </svg>
+      </div>
       <div class="stage-head">
         <div>
           <h1>Desk thread</h1>
-          <p class="muted" id="threadHint">SLA · SHP tracking · inventory · upload SOP in Ops</p>
+          <p class="muted" id="threadHint">SYS.ONLINE · LAT 1.3521° N · JURONG WEST DC</p>
         </div>
         <div class="route-pill" id="routePill">router</div>
       </div>
@@ -233,7 +268,8 @@
       </div>
     </aside>
   </main>
+  </div>
 
-  <script src="/static/app.js?v=20261010-hubbit"></script>
+  <script src="/static/app.js?v=20261020-hud"></script>
 </body>
 </html>

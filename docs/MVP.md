@@ -2,11 +2,12 @@
 
 > **权威文档**：本文件是本仓库唯一产品与技术 MVP 规格。  
 > **规则**：任何 plan、代码修改、UI、部署、CI 变更都必须对齐本文件；冲突时以本文件为准并先更新本文件再改代码。  
-> **版本**：MVP-1.3 · Singapore logistics / warehouse CS agent  
+> **版本**：MVP-1.4 · Singapore logistics / warehouse CS agent  
 > **Live demo**：`https://cs-smart-bot.onrender.com`（Render 服务名保持既有部署）  
 > **产品优先级锁定**（2026-10-10 / collab `f1481266`）：生产默认 OpenAI；RAG 优先政策问答准确；上传 PDF/文档保留；部署继续 Render 单容器。  
 > **Changelog 1.2**（collab `0892b97b`）：C4 clarify 意图解绑；控制台明亮化；collab 强制记录；DEPLOY SteelHub。  
-> **Changelog 1.3**（collab `ce23755f`）：退款禁止对话内打款（仅状态查询 / 人工 ticket）；左侧 Hubbit 动态小兔子客服。
+> **Changelog 1.3**（collab `ce23755f`）：退款禁止对话内打款（仅状态查询 / 人工 ticket）；左侧 Hubbit 动态小兔子客服。  
+> **Changelog 1.4**（collab `e47fa285`）：控制台视觉对齐 portfolio HUD（jiafoo-cho.netlify.app）— 深色网格、石灰绿、开机序列、自定义光标。
 
 ---
 
@@ -50,6 +51,7 @@
 | C10 | CI/CD | GitHub Actions: lint/tests on PR/push; Render auto-deploy from `main` |
 | C11 | Refunds are staff-only | Chat may **query** refund/payment status (pending / succeeded / refunded). Chat must **not** execute payouts. Initiate refund → `refund_approval` ticket + pause bot for human. |
 | C12 | Desk mascot (Hubbit) | Left rail animated bunny buddy; livens console without looking like generic AI chrome. |
+| C13 | HUD console visual | Same motion language as [jiafoo-cho.netlify.app](https://jiafoo-cho.netlify.app): dark ops HUD, lime `#e8ff3d`, Syne/Outfit/IBM Plex Mono, boot sequence, grid/scan/beam, custom cursor. `prefers-reduced-motion` skips boot. |
 
 ### 2.1 Locked product priorities (PM + BE)
 

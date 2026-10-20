@@ -531,20 +531,98 @@ if (clearByok) {
   };
 }
 
-Promise.allSettled([
-  loadOrders(),
-  loadTickets(),
-  loadMetrics(),
-  loadKb(),
-  loadHealth(),
-  loadProfile(),
-  loadAssist(),
-  loadProducts(),
-  loadUploads(),
-]);
-refreshByokUi();
-addMessage(
-  "bot",
-  "SteelHub Logistics Care (Singapore) online. Try inbound SLA, track SHP-2001, or “where is my parcel?” (clarify). Ops → upload PDF/MD/TXT SOPs. Optional BYOK for live policy wording."
-);
-setPipeline("supervisor");
+function runBoot() {
+  const boot = el("preloader");
+  if (!boot) return Promise.resolve();
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    boot.classList.add("is-leaving");
+    return Promise.resolve();
+  }
+  const pct = el("bootPct");
+  const bar = el("bootBar");
+  const status = el("bootStatus");
+  const steps = [
+    [12, "MOUNTING SYSTEMS."],
+    [34, "LOADING POLICY RAG."],
+    [58, "BINDING SHIPMENT TOOLS."],
+    [81, "DESK CHANNEL READY."],
+    [100, "SYS.ONLINE"],
+  ];
+  let i = 0;
+  return new Promise((resolve) => {
+    const tick = () => {
+      const [n, label] = steps[i];
+      if (pct) pct.textContent = `${n}%`;
+      if (bar) bar.style.width = `${n}%`;
+      if (status) status.textContent = label;
+      i += 1;
+      if (i >= steps.length) {
+        setTimeout(() => {
+          boot.classList.add("is-leaving");
+          resolve();
+        }, 280);
+        return;
+      }
+      setTimeout(tick, 220);
+    };
+    tick();
+  });
+}
+
+function initCursor() {
+  const fine = window.matchMedia("(pointer: fine)").matches;
+  if (!fine) return;
+  const dot = el("cursorDot");
+  const ring = el("cursorRing");
+  if (!dot || !ring) return;
+  document.documentElement.classList.add("has-custom-cursor");
+  let x = 0;
+  let y = 0;
+  let rx = 0;
+  let ry = 0;
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      x = e.clientX;
+      y = e.clientY;
+      dot.style.transform = `translate(${x}px, ${y}px)`;
+    },
+    { passive: true }
+  );
+  const loop = () => {
+    rx += (x - rx) * 0.18;
+    ry += (y - ry) * 0.18;
+    ring.style.transform = `translate(${rx}px, ${ry}px)`;
+    requestAnimationFrame(loop);
+  };
+  loop();
+  const hotSel = "a, button, textarea, input, label.switch, .chips button, .tab, .ghost";
+  document.addEventListener("pointerover", (e) => {
+    if (e.target.closest(hotSel)) document.documentElement.classList.add("cursor-hot");
+  });
+  document.addEventListener("pointerout", (e) => {
+    if (e.target.closest(hotSel)) document.documentElement.classList.remove("cursor-hot");
+  });
+}
+
+initCursor();
+runBoot().then(() => {
+  Promise.allSettled([
+    loadOrders(),
+    loadTickets(),
+    loadMetrics(),
+    loadKb(),
+    loadHealth(),
+    loadProfile(),
+    loadAssist(),
+    loadProducts(),
+    loadUploads(),
+  ]);
+  refreshByokUi();
+  addMessage(
+    "bot",
+    "SteelHub Logistics Care (Singapore) online. Try inbound SLA, track SHP-2001, or “where is my parcel?” (clarify). Ops → upload PDF/MD/TXT SOPs. Optional BYOK for live policy wording."
+  );
+  setPipeline("supervisor");
+});

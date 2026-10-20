@@ -1,14 +1,14 @@
 # 职责与边界总表（现行）
 
-> 最后同步 session-id：`ce23755f-d7ba-4e86-989e-e4b8ed5e4513`  
-> 日期：2026-10-10  
+> 最后同步 session-id：`e47fa285-fe2f-4a54-adf3-a62fa74e80b0`  
+> 日期：2026-10-20  
 > 冲突时以最新 session 记录为准，并回写本文件。
 
 ## 前端（FE）
 
 | 负责 | 边界（不做） |
 |------|--------------|
-| `static/` 控制台 UX、Port Daylight 主题、**Hubbit 左栏动效** | `app/` 业务逻辑、退款是否执行 |
+| `static/` 控制台 UX、**portfolio HUD 主题**、Hubbit 左栏动效、boot/cursor | `app/` 业务逻辑、退款是否执行 |
 | 消费 REST 契约与渲染 | 擅自改 API 语义 |
 
 ## 后端（BE）
