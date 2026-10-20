@@ -57,4 +57,4 @@
 - 上一 session：`ce23755f` refund-staff-only-hubbit
 - 相关 MVP：C12、C13
 - 参考：https://jiafoo-cho.netlify.app
-- 相关 commit：push 后回填
+- 相关 commit：`a339279`
